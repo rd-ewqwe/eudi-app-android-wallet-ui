@@ -18,6 +18,7 @@ package eu.europa.ec.commonfeature.ui.qr_scan
 
 import android.content.Context
 import androidx.lifecycle.viewModelScope
+import eu.europa.ec.businesslogic.controller.log.LogController
 import eu.europa.ec.businesslogic.validator.Form
 import eu.europa.ec.businesslogic.validator.Rule
 import eu.europa.ec.commonfeature.config.IssuanceFlowType
@@ -47,6 +48,7 @@ import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
 
 private const val MAX_ALLOWED_FAILED_SCANS = 5
+private const val EUDI_QR_LOG_TAG = "EUDI_QR_SCAN"
 
 data class State(
     val hasCameraPermission: Boolean = false,
@@ -80,6 +82,7 @@ class QrScanViewModel(
     private val interactor: QrScanInteractor,
     private val uiSerializer: UiSerializer,
     private val resourceProvider: ResourceProvider,
+    private val logController: LogController,
     @InjectedParam private val qrScannedConfig: String,
 ) : MviViewModel<Event, State, Effect>() {
 
@@ -149,6 +152,7 @@ class QrScanViewModel(
 
             // Handle valid QR code
             if (urlIsValid) {
+                logController.d(EUDI_QR_LOG_TAG) { "QR scanned – URL: $scannedQr" }
                 calculateNextStep(
                     context = context,
                     qrScanFlow = currentState.qrScannedConfig.qrScanFlow,
