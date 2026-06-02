@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  ~ Copyright (c) 2023 European Commission
+  ~ Copyright (c) 2026 European Commission
   ~
   ~ Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
   ~ Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -34,6 +34,10 @@
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />
+
+    <uses-feature
+        android:name="android.hardware.strongbox_keystore"
+        android:required="false" />
 
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -211,6 +215,13 @@
                     android:host="${rqesDocRetrievalHost}"
                     android:scheme="${rqesDocRetrievalScheme}" />
 
+            </intent-filter>
+
+            <intent-filter> <!--Required for DCAPI -->
+                <action android:name="androidx.credentials.registry.provider.action.GET_CREDENTIAL" />
+                <action android:name="androidx.identitycredentials.action.GET_CREDENTIALS" />
+
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

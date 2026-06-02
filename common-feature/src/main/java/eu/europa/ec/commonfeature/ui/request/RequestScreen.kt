@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,10 +73,13 @@ import eu.europa.ec.uilogic.component.wrap.SimpleBottomSheet
 import eu.europa.ec.uilogic.component.wrap.StickyBottomConfig
 import eu.europa.ec.uilogic.component.wrap.StickyBottomType
 import eu.europa.ec.uilogic.component.wrap.TextConfig
+import eu.europa.ec.uilogic.component.wrap.TextStyleKey
 import eu.europa.ec.uilogic.component.wrap.WrapExpandableListItem
 import eu.europa.ec.uilogic.component.wrap.WrapModalBottomSheet
 import eu.europa.ec.uilogic.component.wrap.WrapStickyBottomContent
 import eu.europa.ec.uilogic.extension.applyTestTag
+import eu.europa.ec.uilogic.extension.finish
+import eu.europa.ec.uilogic.navigation.helper.IntentAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -87,10 +91,13 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequestScreen(
+    intentAction: IntentAction?,
     navController: NavController,
     viewModel: RequestViewModel,
 ) {
     val state: State by viewModel.viewState.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
 
     val isBottomSheetOpen = state.isBottomSheetOpen
     val scope = rememberCoroutineScope()
@@ -101,7 +108,7 @@ fun RequestScreen(
     ContentScreen(
         navigatableAction = ScreenNavigateAction.BACKABLE,
         isLoading = state.isLoading,
-        onBack = { viewModel.setEvent(Event.Pop) },
+        onBack = { viewModel.setEvent(Event.OnBack) },
         stickyBottom = { paddingValues ->
             WrapStickyBottomContent(
                 modifier = Modifier
@@ -144,6 +151,10 @@ fun RequestScreen(
                             inclusive = false
                         )
                     }
+
+                    is Effect.Navigation.Finish -> {
+                        context.finish()
+                    }
                 }
             },
             paddingValues = paddingValues,
@@ -170,7 +181,7 @@ fun RequestScreen(
     }
 
     OneTimeLaunchedEffect {
-        viewModel.setEvent(Event.DoWork)
+        viewModel.setEvent(Event.Init(intentAction = intentAction))
     }
 }
 
@@ -286,7 +297,7 @@ private fun DisplayRequestItems(
                         .padding(vertical = SPACING_SMALL.dp),
                     text = stringResource(R.string.request_warning_text),
                     textConfig = TextConfig(
-                        style = MaterialTheme.typography.bodySmall,
+                        styleKey = TextStyleKey.BodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 )

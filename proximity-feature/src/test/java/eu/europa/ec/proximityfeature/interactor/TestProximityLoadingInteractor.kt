@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -21,6 +21,7 @@ import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvai
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationResult
 import eu.europa.ec.authenticationlogic.model.BiometricCrypto
 import eu.europa.ec.commonfeature.interactor.DeviceAuthenticationInteractor
+import eu.europa.ec.corelogic.controller.SendRequestedDocumentsPartialState
 import eu.europa.ec.corelogic.controller.WalletCorePartialState
 import eu.europa.ec.corelogic.controller.WalletCorePresentationController
 import eu.europa.ec.corelogic.model.AuthenticationData
@@ -40,7 +41,6 @@ import org.junit.Test
 import org.mockito.Mock
 import org.mockito.Mockito.mock
 import org.mockito.MockitoAnnotations
-import org.mockito.kotlin.any
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -290,6 +290,104 @@ class TestProximityLoadingInteractor {
 
     //endregion
 
+    // Case 5:
+    // walletCorePresentationController.events emits:
+    // WalletCorePartialState.RequestIsReadyToBeSent.
+
+    // Case 5 Expected Result:
+    // ProximityLoadingObserveResponsePartialState.RequestReadyToBeSent.
+    @Test
+    fun `Given Case 5, When observeResponse is called, Then RequestReadyToBeSent is mapped`() {
+        coroutineRule.runTest {
+            // Given
+            mockWalletCorePresentationControllerEventEmission(
+                event = WalletCorePartialState.RequestIsReadyToBeSent
+            )
+
+            // When
+            interactor.observeResponse()
+                .runFlowTest {
+                    // Then
+                    assertEquals(
+                        ProximityLoadingObserveResponsePartialState.RequestReadyToBeSent,
+                        awaitItem()
+                    )
+                }
+        }
+    }
+
+    // Case 6:
+    // walletCorePresentationController.events emits:
+    // WalletCorePartialState.IntentToSend (mapped to null - filtered by mapNotNull).
+
+    // Case 6 Expected Result:
+    // No event is emitted.
+    @Test
+    fun `Given Case 6, When observeResponse is called with IntentToSend, Then no event is emitted`() {
+        coroutineRule.runTest {
+            // Given
+            val intent = mock<android.content.Intent>()
+            mockWalletCorePresentationControllerEventEmission(
+                event = WalletCorePartialState.IntentToSend(intent = intent)
+            )
+
+            // When
+            interactor.observeResponse().expectNoEvents()
+        }
+    }
+
+    //endregion
+
+    //region sendRequestedDocuments
+
+    @Test
+    fun `Given controller#sendRequestedDocuments returns RequestSent, When sendRequestedDocuments is called, Then Success is returned`() {
+        // Given
+        whenever(walletCorePresentationController.sendRequestedDocuments())
+            .thenReturn(SendRequestedDocumentsPartialState.RequestSent)
+
+        // When
+        val result = interactor.sendRequestedDocuments()
+
+        // Then
+        assertEquals(
+            ProximityLoadingSendRequestedDocumentPartialState.Success,
+            result
+        )
+    }
+
+    @Test
+    fun `Given controller#sendRequestedDocuments returns Failure, When sendRequestedDocuments is called, Then Failure with the same error is returned`() {
+        // Given
+        whenever(walletCorePresentationController.sendRequestedDocuments())
+            .thenReturn(SendRequestedDocumentsPartialState.Failure(error = mockedPlainFailureMessage))
+
+        // When
+        val result = interactor.sendRequestedDocuments()
+
+        // Then
+        assertEquals(
+            ProximityLoadingSendRequestedDocumentPartialState.Failure(
+                error = mockedPlainFailureMessage
+            ),
+            result
+        )
+    }
+    //endregion
+
+    //region constructor default
+    @Test
+    fun `When constructed without walletCorePresentationController, Then construction does not throw`() {
+        // When
+        val newInteractor = ProximityLoadingInteractorImpl(
+            deviceAuthenticationInteractor = deviceAuthenticationInteractor,
+        )
+
+        // Then
+        assertEquals("DefaultPresentationScopeId", newInteractor.presentationScopeId)
+    }
+    //endregion
+
     //region setScopeId
     @Test
     fun `Given a scopeId, When setScopeId is called, Then Verify presentationScopeId is set to the provided scopeId`() {
@@ -311,11 +409,7 @@ class TestProximityLoadingInteractor {
     }
 
     private fun mockBiometricsAvailabilityResponse(response: BiometricsAvailability) {
-        whenever(deviceAuthenticationInteractor.getBiometricsAvailability(listener = any()))
-            .thenAnswer {
-                val bioAvailability = it.getArgument<(BiometricsAvailability) -> Unit>(0)
-                bioAvailability(response)
-            }
+        whenever(deviceAuthenticationInteractor.getBiometricsAvailability()).thenReturn(response)
     }
 
     private fun mockEmissionOfIntentionallyNotHandledEvent() {

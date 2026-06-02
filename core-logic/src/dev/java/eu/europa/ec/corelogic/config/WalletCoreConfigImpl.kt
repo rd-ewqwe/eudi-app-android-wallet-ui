@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -26,6 +26,7 @@ import eu.europa.ec.eudi.wallet.issue.openid4vci.dpop.DPopConfig
 import eu.europa.ec.eudi.wallet.transfer.openId4vp.ClientIdScheme
 import eu.europa.ec.eudi.wallet.transfer.openId4vp.Format
 import eu.europa.ec.resourceslogic.R
+import java.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 internal class WalletCoreConfigImpl(
@@ -63,6 +64,10 @@ internal class WalletCoreConfigImpl(
                         )
                     }
 
+                    configureDCAPI {
+                        withEnabled(true)
+                    }
+
                     configureReaderTrustStore(
                         context,
                         R.raw.pidissuerca02_cz,
@@ -73,7 +78,8 @@ internal class WalletCoreConfigImpl(
                         R.raw.pidissuerca02_pt,
                         R.raw.pidissuerca02_ut,
                         R.raw.dc4eu,
-                        R.raw.r45_staging
+                        R.raw.r45_staging,
+                        R.raw.multipaz,
                     )
                 }
             }
@@ -119,6 +125,11 @@ internal class WalletCoreConfigImpl(
                     policy = CredentialPolicy.OneTimeUse,
                     numberOfCredentials = 60
                 ),
+            ),
+            reissuanceRule = ReIssuanceRule(
+                minNumberOfCredentials = 2,
+                minExpirationHours = 24,
+                backgroundInterval = Duration.ofMinutes(15)
             )
         )
 

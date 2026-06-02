@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,8 +16,7 @@
 
 package eu.europa.ec.commonfeature.util
 
-import android.util.Base64
-import eu.europa.ec.businesslogic.extension.decodeFromBase64
+import eu.europa.ec.businesslogic.extension.decodeFromBase64ToString
 import eu.europa.ec.businesslogic.extension.encodeToBase64String
 import eu.europa.ec.businesslogic.provider.UuidProvider
 import eu.europa.ec.businesslogic.util.safeLet
@@ -52,8 +51,9 @@ fun extractValueFromDocumentOrEmpty(
         ?: ""
 }
 
-fun keyIsPortrait(key: String): Boolean {
-    return key == DocumentJsonKeys.PORTRAIT
+fun keyIsUserImage(key: String): Boolean {
+    val listOfUserImageKeys = DocumentJsonKeys.BASE64_USER_IMAGE_KEYS
+    return listOfUserImageKeys.contains(key)
 }
 
 fun keyIsSignature(key: String): Boolean {
@@ -255,7 +255,7 @@ fun createKeyValue(
 
         else -> {
 
-            val base64Image = (item as? ByteArray)?.encodeToBase64String(Base64.URL_SAFE)
+            val base64Image = (item as? ByteArray)?.encodeToBase64String()
 
             val date: String? = (item as? String)?.toDateFormatted()
                 ?: (item as? LocalDate)?.toDateFormatted()
@@ -263,7 +263,7 @@ fun createKeyValue(
             val formattedValue = when {
                 base64Image != null -> base64Image
                 keyIsGender(groupKey) -> getGenderValue(item.toString(), resourceProvider)
-                keyIsUserPseudonym(groupKey) -> item.toString().decodeFromBase64()
+                keyIsUserPseudonym(groupKey) -> item.toString().decodeFromBase64ToString()
                 date != null -> date
                 item is Boolean -> resourceProvider.getString(
                     resId = if (item)

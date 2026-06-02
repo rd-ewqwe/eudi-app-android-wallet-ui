@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -28,6 +28,7 @@ class EudiWalletCorePlugin : Plugin<Project> {
             }
             dependencies {
                 add("api", libs.findLibrary("eudi.wallet.core").get())
+                add("implementation", libs.findLibrary("androidx.credentials.registry").get())
             }
         }
     }

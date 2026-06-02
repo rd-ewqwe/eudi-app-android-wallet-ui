@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -33,10 +33,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import eu.europa.ec.authenticationlogic.secure.SecurePin
+import eu.europa.ec.commonfeature.config.OfferCodeUiConfig
 import eu.europa.ec.uilogic.component.AppIconAndText
 import eu.europa.ec.uilogic.component.AppIconAndTextDataUi
 import eu.europa.ec.uilogic.component.content.ContentScreen
@@ -47,7 +48,11 @@ import eu.europa.ec.uilogic.component.preview.ThemeModePreviews
 import eu.europa.ec.uilogic.component.utils.SPACING_LARGE
 import eu.europa.ec.uilogic.component.utils.SPACING_MEDIUM
 import eu.europa.ec.uilogic.component.utils.SPACING_SMALL
-import eu.europa.ec.uilogic.component.wrap.WrapPinTextField
+import eu.europa.ec.uilogic.component.wrap.SecurePinTextFieldState
+import eu.europa.ec.uilogic.component.wrap.WrapSecurePinTextField
+import eu.europa.ec.uilogic.component.wrap.rememberSecurePinTextFieldState
+import eu.europa.ec.uilogic.config.ConfigNavigation
+import eu.europa.ec.uilogic.config.NavigationType
 import eu.europa.ec.uilogic.extension.paddingFrom
 import eu.europa.ec.uilogic.navigation.IssuanceScreens
 import kotlinx.coroutines.channels.Channel
@@ -63,6 +68,9 @@ fun DocumentOfferCodeScreen(
 ) {
     val state: State by viewModel.viewState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val pinInputState = rememberSecurePinTextFieldState(
+        expectedPinLength = state.offerCodeUiConfig.txCodeLength
+    )
 
     ContentScreen(
         isLoading = state.isLoading,
@@ -75,13 +83,14 @@ fun DocumentOfferCodeScreen(
             context = context,
             title = state.screenTitle,
             subTitle = state.screenSubtitle,
-            pinCodeLength = state.offerCodeUiConfig.txCodeLength,
+            pinInputState = pinInputState,
             effectFlow = viewModel.effect,
             onEventSend = { viewModel.setEvent(it) },
             onNavigationRequested = { navigationEffect ->
                 handleNavigationEffect(navigationEffect, navController)
             },
-            paddingValues = paddingValues
+            paddingValues = paddingValues,
+            state = state
         )
     }
 }
@@ -91,7 +100,8 @@ private fun Content(
     context: Context,
     title: String,
     subTitle: String,
-    pinCodeLength: Int,
+    pinInputState: SecurePinTextFieldState,
+    state: State,
     effectFlow: Flow<Effect>,
     onEventSend: (Event) -> Unit,
     onNavigationRequested: (Effect.Navigation) -> Unit,
@@ -135,11 +145,12 @@ private fun Content(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = SPACING_LARGE.dp),
-            length = pinCodeLength,
-            onPinInput = { quickPin ->
+            pinInputState = pinInputState,
+            state = state,
+            onPinComplete = { securePin ->
                 onEventSend(
-                    Event.OnPinChange(
-                        code = quickPin,
+                    Event.OnPinEntered(
+                        code = securePin,
                         context = context
                     )
                 )
@@ -158,20 +169,20 @@ private fun Content(
 
 @Composable
 private fun CodeFieldLayout(
-    modifier: Modifier,
-    length: Int,
-    onPinInput: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    pinInputState: SecurePinTextFieldState,
+    state: State,
+    onPinComplete: (SecurePin) -> Unit,
 ) {
-    WrapPinTextField(
+    WrapSecurePinTextField(
         modifier = modifier,
-        onPinUpdate = {
-            onPinInput(it)
-        },
-        length = length,
-        visualTransformation = PasswordVisualTransformation(),
+        state = pinInputState,
+        onPinLengthChanged = {},
+        onPinComplete = onPinComplete,
         pinWidth = 42.dp,
         focusOnCreate = true,
-        shouldHideKeyboardOnCompletion = true
+        shouldHideKeyboardOnCompletion = true,
+        enabled = !state.isLoading
     )
 }
 
@@ -196,15 +207,35 @@ private fun handleNavigationEffect(
 @Composable
 private fun DocumentOfferCodeScreenEmptyPreview() {
     PreviewTheme {
+
+        val pinInputState = rememberSecurePinTextFieldState(
+            expectedPinLength = 4
+        )
+
         Content(
             title = "Demo Issuer requires verification",
             subTitle = "Type the 5-digit transaction code you received.",
-            pinCodeLength = 5,
+            pinInputState = pinInputState,
             effectFlow = Channel<Effect>().receiveAsFlow(),
             onEventSend = {},
             onNavigationRequested = {},
             paddingValues = PaddingValues(SPACING_MEDIUM.dp),
-            context = LocalContext.current
+            context = LocalContext.current,
+            state = State(
+                isLoading = false,
+                error = null,
+                notifyOnAuthenticationFailure = false,
+                screenTitle = "Demo Issuer requires verification",
+                screenSubtitle = "Type the 5-digit transaction code you received.",
+                offerCodeUiConfig = OfferCodeUiConfig(
+                    offerUri = "https://offer.uri.com",
+                    txCodeLength = 5,
+                    issuerName = "Demo Issuer",
+                    onSuccessNavigation = ConfigNavigation(
+                        navigationType = NavigationType.Pop
+                    )
+                )
+            ),
         )
     }
 }

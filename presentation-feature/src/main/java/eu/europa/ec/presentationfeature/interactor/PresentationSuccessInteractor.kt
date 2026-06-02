@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,6 +16,7 @@
 
 package eu.europa.ec.presentationfeature.interactor
 
+import android.content.Intent
 import eu.europa.ec.businesslogic.extension.ifEmptyOrNull
 import eu.europa.ec.businesslogic.extension.safeAsync
 import eu.europa.ec.businesslogic.provider.UuidProvider
@@ -54,6 +55,7 @@ sealed class PresentationSuccessInteractorGetUiItemsPartialState {
 interface PresentationSuccessInteractor : ScopedPresentationInteractor {
     val initiatorRoute: String
     val redirectUri: URI?
+    fun getPendingIntent(): Intent?
     fun getUiItems(): Flow<PresentationSuccessInteractorGetUiItemsPartialState>
     fun stopPresentation()
 }
@@ -74,6 +76,10 @@ class PresentationSuccessInteractorImpl(
 
     override val redirectUri: URI?
         get() = walletCorePresentationController.redirectUri
+
+    override fun getPendingIntent(): Intent? {
+        return walletCorePresentationController.pendingIntent
+    }
 
     override fun getUiItems(): Flow<PresentationSuccessInteractorGetUiItemsPartialState> {
         return flow {

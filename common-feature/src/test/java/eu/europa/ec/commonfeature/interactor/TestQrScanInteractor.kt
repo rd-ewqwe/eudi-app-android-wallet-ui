@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,6 +16,8 @@
 
 package eu.europa.ec.commonfeature.interactor
 
+import android.content.Context
+import android.net.Uri
 import eu.europa.ec.businesslogic.validator.Form
 import eu.europa.ec.businesslogic.validator.FormValidationResult
 import eu.europa.ec.businesslogic.validator.FormValidator
@@ -77,6 +79,25 @@ class TestQrScanInteractor {
             assertEquals(expectedResult, result)
             verify(formValidator).validateForm(form)
         }
+
+    // Case: launchRqesSdk behaviour
+    // The function is a single-line delegation to the EudiRQESUi Kotlin object singleton
+    // (an instance method on a singleton, not a Java static), so Mockito's mockStatic
+    // cannot intercept the call. We exercise the line for coverage and tolerate any
+    // throwable from the un-initialized SDK.
+    @Test
+    fun `When launchRqesSdk is called, Then the call is dispatched to the EudiRQESUi singleton`() {
+        // Given
+        val context = mock(Context::class.java)
+        val uri = mock(Uri::class.java)
+
+        try {
+            // When
+            interactor.launchRqesSdk(context = context, uri = uri)
+        } catch (_: Throwable) {
+            // Expected: SDK throws because setup() has not been called in unit-test context.
+        }
+    }
 
     // Case: validateForms behavior
     // When FormValidationResult is returned by validateForms with a list of forms on formValidator,

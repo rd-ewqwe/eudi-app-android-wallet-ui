@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,29 +16,29 @@
 
 package eu.europa.ec.commonfeature.config
 
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import eu.europa.ec.corelogic.model.FormatType
 import eu.europa.ec.uilogic.serializer.UiSerializable
 import eu.europa.ec.uilogic.serializer.UiSerializableParser
-import eu.europa.ec.uilogic.serializer.adapter.SerializableTypeAdapter
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 sealed interface IssuanceFlowType {
+    @Serializable
+    @SerialName("NoDocument")
     data object NoDocument : IssuanceFlowType
+
+    @Serializable
+    @SerialName("ExtraDocument")
     data class ExtraDocument(val formatType: FormatType?) : IssuanceFlowType
 }
 
+@Serializable
 data class IssuanceUiConfig(
     val flowType: IssuanceFlowType,
 ) : UiSerializable {
 
     companion object Parser : UiSerializableParser {
         override val serializedKeyName = "issuanceConfig"
-        override fun provideParser(): Gson {
-            return GsonBuilder().registerTypeAdapter(
-                IssuanceFlowType::class.java,
-                SerializableTypeAdapter<IssuanceFlowType>()
-            ).create()
-        }
     }
 }

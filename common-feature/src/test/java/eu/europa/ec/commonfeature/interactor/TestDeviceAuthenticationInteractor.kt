@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,26 +16,21 @@
 
 package eu.europa.ec.commonfeature.interactor
 
-import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationController
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationResult
 import eu.europa.ec.authenticationlogic.model.BiometricCrypto
 import eu.europa.ec.testfeature.util.mockedNotifyOnAuthenticationFailure
-import eu.europa.ec.testlogic.base.TestApplication
 import eu.europa.ec.testlogic.base.getMockedContext
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.MockitoAnnotations
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = TestApplication::class)
 class TestDeviceAuthenticationInteractor {
 
     @Mock
@@ -68,16 +63,22 @@ class TestDeviceAuthenticationInteractor {
     // Case: getBiometricsAvailability behaviour
     @Test
     fun `Given a BiometricsAvailability listener, When getBiometricsAvailability is called, Then deviceSupportsBiometrics should be triggered`() {
-        // Given
-        val mockListener: (BiometricsAvailability) -> Unit = mock()
 
         // When
-        interactor.getBiometricsAvailability(
-            listener = mockListener
-        )
+        interactor.getBiometricsAvailability()
 
         // Then
-        verify(deviceAuthenticationController).deviceSupportsBiometrics(mockListener)
+        verify(deviceAuthenticationController).deviceSupportsBiometrics()
+    }
+
+    // Case: launchBiometricSystemScreen behaviour
+    @Test
+    fun `When launchBiometricSystemScreen is called, Then deviceAuthenticationController#launchBiometricSystemScreen is invoked`() {
+        // When
+        interactor.launchBiometricSystemScreen()
+
+        // Then
+        verify(deviceAuthenticationController).launchBiometricSystemScreen()
     }
 
     // Case: authenticateWithBiometrics behaviour

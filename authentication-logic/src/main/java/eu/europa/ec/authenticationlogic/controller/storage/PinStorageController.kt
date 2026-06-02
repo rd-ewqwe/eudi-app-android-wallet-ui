@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -17,19 +17,21 @@
 package eu.europa.ec.authenticationlogic.controller.storage
 
 import eu.europa.ec.authenticationlogic.config.StorageConfig
+import eu.europa.ec.authenticationlogic.secure.SecurePin
 
 interface PinStorageController {
-    fun retrievePin(): String
-    fun setPin(pin: String)
-    fun isPinValid(pin: String): Boolean
+    suspend fun hasPin(): Boolean
+    suspend fun setPin(pin: SecurePin)
+    suspend fun isPinValid(pin: SecurePin): Boolean
 }
 
 class PinStorageControllerImpl(private val storageConfig: StorageConfig) : PinStorageController {
-    override fun retrievePin(): String = storageConfig.pinStorageProvider.retrievePin()
+    override suspend fun hasPin(): Boolean = storageConfig.pinStorageProvider.hasPin()
 
-    override fun setPin(pin: String) {
+    override suspend fun setPin(pin: SecurePin) {
         storageConfig.pinStorageProvider.setPin(pin)
     }
 
-    override fun isPinValid(pin: String): Boolean = storageConfig.pinStorageProvider.isPinValid(pin)
+    override suspend fun isPinValid(pin: SecurePin): Boolean =
+        storageConfig.pinStorageProvider.isPinValid(pin)
 }

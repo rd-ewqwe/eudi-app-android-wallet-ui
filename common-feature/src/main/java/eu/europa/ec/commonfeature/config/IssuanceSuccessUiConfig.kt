@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,15 +16,13 @@
 
 package eu.europa.ec.commonfeature.config
 
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import eu.europa.ec.eudi.wallet.document.DocumentId
 import eu.europa.ec.uilogic.config.ConfigNavigation
-import eu.europa.ec.uilogic.config.NavigationType
 import eu.europa.ec.uilogic.serializer.UiSerializable
 import eu.europa.ec.uilogic.serializer.UiSerializableParser
-import eu.europa.ec.uilogic.serializer.adapter.SerializableTypeAdapter
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class IssuanceSuccessUiConfig(
     val documentIds: List<DocumentId>,
     val onSuccessNavigation: ConfigNavigation,
@@ -32,12 +30,5 @@ data class IssuanceSuccessUiConfig(
 
     companion object Parser : UiSerializableParser {
         override val serializedKeyName = "issuanceSuccessConfig"
-        override fun provideParser(): Gson {
-            return GsonBuilder()
-                .registerTypeAdapter(
-                    NavigationType::class.java,
-                    SerializableTypeAdapter<NavigationType>()
-                ).create()
-        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -21,10 +21,14 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAuthenticate
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
+import eu.europa.ec.authenticationlogic.provider.PinLockoutState
+import eu.europa.ec.authenticationlogic.secure.SecurePin
 import eu.europa.ec.businesslogic.extension.toUri
 import eu.europa.ec.commonfeature.config.BiometricUiConfig
 import eu.europa.ec.commonfeature.interactor.BiometricInteractor
 import eu.europa.ec.commonfeature.interactor.QuickPinInteractorPinValidPartialState
+import eu.europa.ec.resourceslogic.R
+import eu.europa.ec.resourceslogic.provider.ResourceProvider
 import eu.europa.ec.uilogic.component.content.ContentErrorConfig
 import eu.europa.ec.uilogic.config.ConfigNavigation
 import eu.europa.ec.uilogic.config.FlowCompletion
@@ -37,6 +41,8 @@ import eu.europa.ec.uilogic.navigation.CommonScreens
 import eu.europa.ec.uilogic.navigation.helper.generateComposableArguments
 import eu.europa.ec.uilogic.navigation.helper.generateComposableNavigationLink
 import eu.europa.ec.uilogic.serializer.UiSerializer
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
@@ -51,7 +57,8 @@ sealed class Event : ViewEvent {
     data object OnNavigateBack : Event()
     data object OnErrorDismiss : Event()
     data object Init : Event()
-    data class OnQuickPinEntered(val quickPin: String) : Event()
+    data class OnQuickPinEntered(val quickPin: SecurePin) : Event()
+    data class OnQuickPinLengthChanged(val length: Int) : Event()
 }
 
 data class State(
@@ -59,11 +66,12 @@ data class State(
     val error: ContentErrorConfig? = null,
     val config: BiometricUiConfig,
     val quickPinError: String? = null,
-    val quickPin: String = "",
     val userBiometricsAreEnabled: Boolean = false,
     val isBackable: Boolean = false,
     val notifyOnAuthenticationFailure: Boolean = true,
-    val quickPinSize: Int = 6
+    val quickPinSize: Int = 6,
+    val isLockedOut: Boolean = false,
+    val lockoutMessage: String? = null
 ) : ViewState
 
 sealed class Effect : ViewSideEffect {
@@ -95,12 +103,15 @@ sealed class Effect : ViewSideEffect {
 @KoinViewModel
 class BiometricViewModel(
     private val biometricInteractor: BiometricInteractor,
+    private val resourceProvider: ResourceProvider,
     private val uiSerializer: UiSerializer,
     @InjectedParam private val biometricConfig: String
 ) : MviViewModel<Event, State, Effect>() {
 
     private val biometricUiConfig
         get() = viewState.value.config
+
+    private var lockoutTickJob: Job? = null
 
     override fun setInitialState(): State {
         val config = uiSerializer.fromBase64(
@@ -110,7 +121,7 @@ class BiometricViewModel(
         ) ?: throw RuntimeException("BiometricUiConfig:: is Missing or invalid")
         return State(
             config = config,
-            userBiometricsAreEnabled = biometricInteractor.getBiometricUserSelection(),
+            userBiometricsAreEnabled = false,
             isBackable = config.onBackNavigationConfig.isBackable
         )
     }
@@ -118,42 +129,53 @@ class BiometricViewModel(
     override fun handleEvents(event: Event) {
         when (event) {
             is Event.Init -> {
-                if (biometricUiConfig.shouldInitializeBiometricAuthOnCreate && viewState.value.userBiometricsAreEnabled) {
-                    setEffect {
-                        Effect.InitializeBiometricAuthOnCreate
+                viewModelScope.launch {
+                    val userBiometricsAreEnabled = biometricInteractor.getBiometricUserSelection()
+                    setState {
+                        copy(userBiometricsAreEnabled = userBiometricsAreEnabled)
+                    }
+                    when (val lockoutState = biometricInteractor.getPinLockoutState()) {
+                        is PinLockoutState.Active -> startLockoutTick(lockoutState.remaining.inWholeMilliseconds)
+                        PinLockoutState.Idle -> Unit
+                    }
+                    if (
+                        biometricUiConfig.shouldInitializeBiometricAuthOnCreate
+                        && userBiometricsAreEnabled
+                    ) {
+                        setEffect {
+                            Effect.InitializeBiometricAuthOnCreate
+                        }
                     }
                 }
             }
 
             is Event.OnBiometricsClicked -> {
                 setState { copy(error = null) }
-                biometricInteractor.getBiometricsAvailability {
-                    when (it) {
-                        is BiometricsAvailability.CanAuthenticate -> authenticate(
-                            event.context
-                        )
+                when (val availability = biometricInteractor.getBiometricsAvailability()) {
+                    is BiometricsAvailability.CanAuthenticate -> authenticate(
+                        event.context
+                    )
 
-                        is BiometricsAvailability.NonEnrolled -> {
-                            if (!event.shouldThrowErrorIfNotAvailable) {
-                                return@getBiometricsAvailability
-                            }
-                            setEffect {
-                                Effect.Navigation.LaunchBiometricsSystemScreen
-                            }
+                    is BiometricsAvailability.NonEnrolled -> {
+                        if (!event.shouldThrowErrorIfNotAvailable) {
+                            return
                         }
+                        setEffect {
+                            Effect.Navigation.LaunchBiometricsSystemScreen
+                        }
+                    }
 
-                        is BiometricsAvailability.Failure -> {
-                            if (!event.shouldThrowErrorIfNotAvailable) {
-                                return@getBiometricsAvailability
-                            }
-                            setState {
-                                copy(
-                                    error = ContentErrorConfig(
-                                        errorSubTitle = it.errorMessage,
-                                        onCancel = { setEvent(Event.OnErrorDismiss) }
-                                    )
+                    is BiometricsAvailability.Failure -> {
+                        if (!event.shouldThrowErrorIfNotAvailable) {
+                            return
+                        }
+                        setState {
+                            copy(
+                                error = ContentErrorConfig(
+                                    errorSubTitle = availability.errorMessage,
+                                    onCancel = { setEvent(Event.OnErrorDismiss) }
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -179,18 +201,48 @@ class BiometricViewModel(
             }
 
             is Event.OnQuickPinEntered -> {
+                if (viewState.value.isLockedOut) {
+                    event.quickPin.close()
+                    return
+                }
                 setState {
-                    copy(quickPin = event.quickPin, quickPinError = null)
+                    copy(
+                        quickPinError = null
+                    )
                 }
                 authorizeWithPin(event.quickPin)
+            }
+
+            is Event.OnQuickPinLengthChanged -> {
+                if (viewState.value.isLockedOut) {
+                    return
+                }
+                setState {
+                    copy(
+                        quickPinError = null
+                    )
+                }
             }
         }
     }
 
-    private fun authorizeWithPin(pin: String) {
+    override fun onCleared() {
+        lockoutTickJob?.cancel()
+        lockoutTickJob = null
+        super.onCleared()
+    }
+
+    private fun authorizeWithPin(pin: SecurePin) {
 
         if (pin.length != viewState.value.quickPinSize) {
+            pin.close()
             return
+        }
+
+        setState {
+            copy(
+                isLoading = true
+            )
         }
 
         viewModelScope.launch {
@@ -198,14 +250,26 @@ class BiometricViewModel(
                 .collect {
                     when (it) {
                         is QuickPinInteractorPinValidPartialState.Failed -> {
-                            setState {
-                                copy(
-                                    quickPinError = it.errorMessage
-                                )
+                            when (val lockoutState = biometricInteractor.recordPinFailure()) {
+                                is PinLockoutState.Active -> {
+                                    setState { copy(isLoading = false) }
+                                    startLockoutTick(lockoutState.remaining.inWholeMilliseconds)
+                                }
+
+                                PinLockoutState.Idle -> {
+                                    setState {
+                                        copy(
+                                            quickPinError = it.errorMessage,
+                                            isLoading = false
+                                        )
+                                    }
+                                }
                             }
                         }
 
                         is QuickPinInteractorPinValidPartialState.Success -> {
+                            biometricInteractor.resetPinThrottle()
+                            stopLockoutTick()
                             authenticationSuccess()
                         }
                     }
@@ -220,7 +284,11 @@ class BiometricViewModel(
         ) {
             when (it) {
                 is BiometricsAuthenticate.Success -> {
-                    authenticationSuccess()
+                    viewModelScope.launch {
+                        biometricInteractor.resetPinThrottle()
+                        stopLockoutTick()
+                        authenticationSuccess()
+                    }
                 }
 
                 else -> {}
@@ -232,6 +300,57 @@ class BiometricViewModel(
         doNavigation(
             navigation = biometricUiConfig.onSuccessNavigation,
             flowSucceeded = true
+        )
+    }
+
+    private fun startLockoutTick(initialRemainingMs: Long) {
+        lockoutTickJob?.cancel()
+        if (initialRemainingMs <= 0L) {
+            stopLockoutTick()
+            return
+        }
+        setState {
+            copy(
+                isLockedOut = true,
+                isLoading = false,
+                quickPinError = null,
+                lockoutMessage = buildLockoutMessage(initialRemainingMs)
+            )
+        }
+        lockoutTickJob = viewModelScope.launch {
+            var remaining = initialRemainingMs
+            while (remaining > 0L) {
+                delay(1_000L)
+                remaining -= 1_000L
+                if (remaining <= 0L) break
+                setState {
+                    copy(lockoutMessage = buildLockoutMessage(remaining))
+                }
+            }
+            stopLockoutTick()
+        }
+    }
+
+    private fun stopLockoutTick() {
+        lockoutTickJob?.cancel()
+        lockoutTickJob = null
+        setState {
+            copy(
+                isLockedOut = false,
+                lockoutMessage = null
+            )
+        }
+    }
+
+    private fun buildLockoutMessage(remainingMs: Long): String {
+        val totalSeconds = ((remainingMs + 999L) / 1000L).coerceAtLeast(0L)
+        val minutes = totalSeconds / 60L
+        val seconds = totalSeconds % 60L
+        val mmss = "%02d:%02d".format(minutes, seconds)
+        return resourceProvider.getString(
+            R.string.quick_pin_locked_out,
+            biometricInteractor.maxFailedPinAttempts,
+            mmss
         )
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -18,10 +18,16 @@ package eu.europa.ec.storagelogic.di
 
 import android.content.Context
 import androidx.room.Room
+import eu.europa.ec.businesslogic.controller.crypto.CryptoController
+import eu.europa.ec.businesslogic.controller.storage.PrefKeys
 import eu.europa.ec.storagelogic.dao.BookmarkDao
+import eu.europa.ec.storagelogic.dao.FailedReIssuedDocumentDao
 import eu.europa.ec.storagelogic.dao.RevokedDocumentDao
 import eu.europa.ec.storagelogic.dao.TransactionLogDao
 import eu.europa.ec.storagelogic.service.DatabaseService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Configuration
 import org.koin.core.annotation.Module
@@ -33,12 +39,26 @@ import org.koin.core.annotation.Single
 class LogicStorageModule
 
 @Single
-fun provideAppDatabase(context: Context): DatabaseService =
-    Room.databaseBuilder(
+fun provideAppDatabase(
+    context: Context,
+    prefKeys: PrefKeys,
+    cryptoController: CryptoController
+): DatabaseService {
+    System.loadLibrary("sqlcipher")
+    val key = runBlocking(Dispatchers.IO) {
+        prefKeys.getDbKey() ?: cryptoController.createRandomKey(context).also {
+            prefKeys.setDbKey(it)
+        }
+    }
+    return Room.databaseBuilder(
         context,
         DatabaseService::class.java,
         "eudi.app.wallet.storage"
-    ).fallbackToDestructiveMigration(true).build()
+    )
+        .openHelperFactory(SupportOpenHelperFactory(key))
+        .fallbackToDestructiveMigration(true)
+        .build()
+}
 
 @Single
 fun provideBookmarkDao(service: DatabaseService): BookmarkDao = service.bookmarkDao()
@@ -50,3 +70,7 @@ fun provideRevokedDocumentDao(service: DatabaseService): RevokedDocumentDao =
 @Single
 fun provideTransactionLogDao(service: DatabaseService): TransactionLogDao =
     service.transactionLogDao()
+
+@Single
+fun provideFailedReIssuedDocumentDao(service: DatabaseService): FailedReIssuedDocumentDao =
+    service.failedReIssuedDocumentDao()

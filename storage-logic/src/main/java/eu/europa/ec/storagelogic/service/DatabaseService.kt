@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -19,9 +19,11 @@ package eu.europa.ec.storagelogic.service
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import eu.europa.ec.storagelogic.dao.BookmarkDao
+import eu.europa.ec.storagelogic.dao.FailedReIssuedDocumentDao
 import eu.europa.ec.storagelogic.dao.RevokedDocumentDao
 import eu.europa.ec.storagelogic.dao.TransactionLogDao
 import eu.europa.ec.storagelogic.model.Bookmark
+import eu.europa.ec.storagelogic.model.FailedReIssuedDocument
 import eu.europa.ec.storagelogic.model.RevokedDocument
 import eu.europa.ec.storagelogic.model.TransactionLog
 
@@ -29,12 +31,14 @@ import eu.europa.ec.storagelogic.model.TransactionLog
     entities = [
         Bookmark::class,
         RevokedDocument::class,
-        TransactionLog::class
+        TransactionLog::class,
+        FailedReIssuedDocument::class
     ],
-    version = 1
+    version = 2
 )
 abstract class DatabaseService : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun revokedDocumentDao(): RevokedDocumentDao
     abstract fun transactionLogDao(): TransactionLogDao
+    abstract fun failedReIssuedDocumentDao(): FailedReIssuedDocumentDao
 }

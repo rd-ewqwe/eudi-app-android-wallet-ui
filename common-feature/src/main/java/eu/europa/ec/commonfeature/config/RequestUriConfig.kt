@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,27 +16,41 @@
 
 package eu.europa.ec.commonfeature.config
 
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import eu.europa.ec.corelogic.controller.PresentationControllerConfig
+import eu.europa.ec.uilogic.navigation.helper.IntentAction
+import eu.europa.ec.uilogic.navigation.helper.IntentType
 import eu.europa.ec.uilogic.serializer.UiSerializable
 import eu.europa.ec.uilogic.serializer.UiSerializableParser
-import eu.europa.ec.uilogic.serializer.adapter.SerializableTypeAdapter
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 sealed interface PresentationMode {
     val scopeId: String
 
+    @Serializable
+    @SerialName("OpenId4Vp")
     data class OpenId4Vp(val uri: String, val initiatorRoute: String) : PresentationMode {
         override val scopeId: String
             get() = "vp_presentation_scope_id"
     }
 
+    @Serializable
+    @SerialName("Ble")
     data class Ble(val initiatorRoute: String) : PresentationMode {
         override val scopeId: String
             get() = "ble_presentation_scope_id"
     }
+
+    @Serializable
+    @SerialName("DcApi")
+    data class DcApi(val initiatorRoute: String) : PresentationMode {
+        override val scopeId: String
+            get() = "dc_api_presentation_scope_id"
+    }
 }
 
+@Serializable
 data class RequestUriConfig(
     val mode: PresentationMode
 ) : UiSerializable {
@@ -45,22 +59,26 @@ data class RequestUriConfig(
 
     companion object Parser : UiSerializableParser {
         override val serializedKeyName = "requestUriConfig"
-
-        override fun provideParser(): Gson {
-            return GsonBuilder().registerTypeAdapter(
-                PresentationMode::class.java,
-                SerializableTypeAdapter<PresentationMode>()
-            ).create()
-        }
     }
 }
 
-fun RequestUriConfig.toDomainConfig(): PresentationControllerConfig {
+fun RequestUriConfig.toDomainConfig(intentAction: IntentAction?): PresentationControllerConfig {
     return when (mode) {
         is PresentationMode.Ble -> PresentationControllerConfig.Ble(mode.initiatorRoute)
         is PresentationMode.OpenId4Vp -> PresentationControllerConfig.OpenId4VP(
             mode.uri,
             mode.initiatorRoute
         )
+
+        is PresentationMode.DcApi -> {
+            intentAction?.let { safeIntentAction ->
+                when (safeIntentAction.type) {
+                    IntentType.DC_API -> PresentationControllerConfig.DcApi(
+                        initiator = mode.initiatorRoute,
+                        startIntent = safeIntentAction.intent
+                    )
+                }
+            } ?: throw IllegalStateException("Cannot create DcApi config without intentAction")
+        }
     }
 }

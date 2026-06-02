@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -20,6 +20,8 @@ import eu.europa.ec.businesslogic.config.ConfigLogic
 import eu.europa.ec.businesslogic.controller.log.LogController
 import eu.europa.ec.businesslogic.provider.UuidProvider
 import eu.europa.ec.businesslogic.validator.FilterValidator
+import eu.europa.ec.commonfeature.interactor.BiometricInteractor
+import eu.europa.ec.commonfeature.interactor.DeviceAuthenticationInteractor
 import eu.europa.ec.corelogic.config.WalletCoreConfig
 import eu.europa.ec.corelogic.controller.WalletCoreDocumentsController
 import eu.europa.ec.dashboardfeature.interactor.DashboardInteractor
@@ -58,10 +60,12 @@ fun provideDashboardInteractor(
 
 @Factory
 fun provideSettingsInteractor(
+    biometricInteractor: BiometricInteractor,
     configLogic: ConfigLogic,
     logController: LogController,
     resourceProvider: ResourceProvider,
 ): SettingsInteractor = SettingsInteractorImpl(
+    biometricInteractor,
     configLogic,
     logController,
     resourceProvider,
@@ -113,12 +117,14 @@ fun provideDocumentSignInteractor(
 @Factory
 fun provideDocumentDetailsInteractor(
     walletCoreDocumentsController: WalletCoreDocumentsController,
+    deviceAuthenticationInteractor: DeviceAuthenticationInteractor,
     resourceProvider: ResourceProvider,
     uuidProvider: UuidProvider,
     configLogic: ConfigLogic
 ): DocumentDetailsInteractor =
     DocumentDetailsInteractorImpl(
         walletCoreDocumentsController,
+        deviceAuthenticationInteractor,
         resourceProvider,
         uuidProvider,
         configLogic

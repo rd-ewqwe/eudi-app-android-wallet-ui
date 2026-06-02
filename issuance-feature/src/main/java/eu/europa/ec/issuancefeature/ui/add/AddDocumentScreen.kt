@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -78,13 +78,14 @@ import eu.europa.ec.uilogic.component.utils.VSpacer
 import eu.europa.ec.uilogic.component.wrap.ButtonConfig
 import eu.europa.ec.uilogic.component.wrap.ButtonType
 import eu.europa.ec.uilogic.component.wrap.TextConfig
+import eu.europa.ec.uilogic.component.wrap.TextStyleKey
 import eu.europa.ec.uilogic.component.wrap.WrapButton
 import eu.europa.ec.uilogic.component.wrap.WrapImage
 import eu.europa.ec.uilogic.component.wrap.WrapListItem
 import eu.europa.ec.uilogic.component.wrap.WrapText
 import eu.europa.ec.uilogic.extension.applyTestTag
 import eu.europa.ec.uilogic.extension.finish
-import eu.europa.ec.uilogic.extension.getPendingDeepLink
+import eu.europa.ec.uilogic.extension.getPendingUri
 import eu.europa.ec.uilogic.extension.paddingFrom
 import eu.europa.ec.uilogic.navigation.IssuanceScreens
 import eu.europa.ec.uilogic.navigation.helper.handleDeepLinkAction
@@ -165,7 +166,7 @@ fun AddDocumentScreen(
         lifecycleOwner = LocalLifecycleOwner.current,
         lifecycleEvent = Lifecycle.Event.ON_RESUME
     ) {
-        viewModel.setEvent(Event.Init(context.getPendingDeepLink()))
+        viewModel.setEvent(Event.Init(context.getPendingUri()))
     }
 }
 
@@ -288,7 +289,7 @@ private fun Options(
                         .padding(bottom = SPACING_MEDIUM.dp),
                     text = issuerId,
                     textConfig = TextConfig(
-                        style = MaterialTheme.typography.labelSmall,
+                        styleKey = TextStyleKey.LabelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 )

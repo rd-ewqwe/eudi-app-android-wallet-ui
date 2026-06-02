@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,14 +16,27 @@
 
 package eu.europa.ec.corelogic.service
 
+import eu.europa.ec.businesslogic.controller.storage.PrefKeys
+import eu.europa.ec.corelogic.di.WalletCoreScope
+import eu.europa.ec.corelogic.di.getOrCreateKoinScope
 import eu.europa.ec.eudi.iso18013.transfer.TransferManager
 import eu.europa.ec.eudi.wallet.EudiWallet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.android.inject
 import eu.europa.ec.eudi.iso18013.transfer.engagement.NfcEngagementService as BaseService
 
 class NfcEngagementService : BaseService() {
 
-    val wallet: EudiWallet by inject()
+    private val prefKeys: PrefKeys by inject()
+
+    private val wallet: EudiWallet by lazy {
+        val sessionId = runBlocking(Dispatchers.IO) { prefKeys.getSessionId() }
+        if (sessionId.isEmpty()) {
+            throw RuntimeException("Missing SessionId")
+        }
+        getOrCreateKoinScope<WalletCoreScope>(sessionId).get<EudiWallet>()
+    }
 
     override val transferManager: TransferManager
         get() = wallet.transferManager

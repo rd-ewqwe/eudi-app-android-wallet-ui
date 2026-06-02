@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,10 +16,12 @@
 
 package eu.europa.ec.commonfeature.di
 
+import eu.europa.ec.authenticationlogic.config.AuthenticationConfig
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricAuthenticationController
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationController
 import eu.europa.ec.authenticationlogic.controller.storage.BiometryStorageController
 import eu.europa.ec.authenticationlogic.controller.storage.PinStorageController
+import eu.europa.ec.authenticationlogic.controller.throttle.PinThrottleController
 import eu.europa.ec.businesslogic.validator.FormValidator
 import eu.europa.ec.commonfeature.interactor.BiometricInteractor
 import eu.europa.ec.commonfeature.interactor.BiometricInteractorImpl
@@ -42,23 +44,33 @@ class FeatureCommonModule
 
 @Factory
 fun provideQuickPinInteractor(
-    formValidator: FormValidator,
     pinStorageController: PinStorageController,
-    resourceProvider: ResourceProvider
+    resourceProvider: ResourceProvider,
+    pinThrottleController: PinThrottleController,
+    authenticationConfig: AuthenticationConfig
 ): QuickPinInteractor {
-    return QuickPinInteractorImpl(formValidator, pinStorageController, resourceProvider)
+    return QuickPinInteractorImpl(
+        pinStorageController,
+        resourceProvider,
+        pinThrottleController,
+        authenticationConfig
+    )
 }
 
 @Factory
 fun provideBiometricInteractor(
     biometryStorageController: BiometryStorageController,
     biometricAuthenticationController: BiometricAuthenticationController,
-    quickPinInteractor: QuickPinInteractor
+    quickPinInteractor: QuickPinInteractor,
+    pinThrottleController: PinThrottleController,
+    authenticationConfig: AuthenticationConfig
 ): BiometricInteractor {
     return BiometricInteractorImpl(
         biometryStorageController,
         biometricAuthenticationController,
-        quickPinInteractor
+        quickPinInteractor,
+        pinThrottleController,
+        authenticationConfig
     )
 }
 

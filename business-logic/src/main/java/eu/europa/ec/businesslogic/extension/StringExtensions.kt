@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -20,34 +20,44 @@ import android.net.Uri
 import android.util.Base64
 import com.google.gson.Gson
 import java.net.URLEncoder
+import kotlin.math.min
 
 /**
- * Encodes a string to a Base64 string using UTF-8 charset and URL-safe encoding.
+ * Encodes the string into a Base64 string using the UTF-8 charset.
  *
- * This function encodes the string using the standard Base64 algorithm, but with the following modifications:
- * - Uses UTF-8 encoding to convert the string to bytes.
- * - Removes padding characters from the end of the encoded string.
- * - Does not wrap the output.  It will be a single line.
- * - Uses URL-safe characters (replacing '+' with '-' and '/' with '_').
+ * This function applies the following configuration:
+ * - [Base64.NO_WRAP]: Omits all line terminators.
+ * - [Base64.NO_PADDING]: Omits the padding '=' characters at the end.
+ * - [Base64.URL_SAFE]: Uses '-' and '_' instead of '+' and '/' to make the output safe for URLs.
  *
- * These modifications are suitable for encoding data intended to be used in URLs or other contexts where standard Base64 encoding may be problematic due to padding or special characters.
- *
- * @return The Base64 encoded string.
+ * @return A URL-safe Base64 encoded representation of the string.
  */
-fun String.encodeToBase64(): String = Base64.encodeToString(
-    this.toByteArray(Charsets.UTF_8),
-    Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE
-)
+fun String.encodeToBase64(flags: Int = Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE): String =
+    Base64.encodeToString(
+        this.toByteArray(Charsets.UTF_8),
+        flags
+    )
 
 /**
- * Decodes a Base64 encoded string to its original UTF-8 representation.
- *  It uses URL_SAFE, NO_WRAP and NO_PADDING flags for decoding.
- *
- * @return The decoded string.
+ * Decodes a Base64 encoded string back to its original UTF-8 string representation
  */
-fun String.decodeFromBase64(): String = Base64.decode(
-    this, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE
-).toString(Charsets.UTF_8)
+fun String.decodeFromBase64ToString(flags: Int = Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE): String =
+    this.decodeFromBase64(flags).toString(Charsets.UTF_8)
+
+/**
+ * Decodes a Base64 encoded string back to its original byte array representation.
+ *
+ * This function reverses the encoding performed by [encodeToBase64], using the following configuration:
+ * - Supports URL-safe decoding (interprets '-' as '+' and '_' as '/').
+ * - Handles strings without padding characters and ignores line wraps.
+ *
+ * @return The decoded [ByteArray].
+ */
+fun String.decodeFromBase64(flags: Int = Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE): ByteArray =
+    Base64.decode(
+        this,
+        flags
+    )
 
 /**
  * Encodes a string into a URL-safe format using UTF-8 encoding.
@@ -148,7 +158,7 @@ fun String.splitToLines(lineLength: Int): String {
         var result = ""
         var index = 0
         while (index < length) {
-            val line = substring(index, Math.min(index + lineLength, length))
+            val line = substring(index, min(index + lineLength, length))
             result += (if (result.isEmpty()) line else "\n$line")
             index += lineLength
         }
@@ -156,6 +166,15 @@ fun String.splitToLines(lineLength: Int): String {
     }
 }
 
+/**
+ * Returns the first part of the string before the specified separator.
+ *
+ * If the separator is found, this function returns the substring preceding the first occurrence.
+ * If the separator is not found or the string is empty, the original string is returned.
+ *
+ * @param separator The string used to split the receiver string.
+ * @return The substring before the first occurrence of the separator, or the original string if not found.
+ */
 fun String.firstPart(separator: String): String = this.split(separator).firstOrNull() ?: this
 
 /**
@@ -183,34 +202,73 @@ fun String?.ifEmptyOrNull(default: String): String {
     return if (this.isNullOrBlank()) default else this
 }
 
-private val FY_SEED = intArrayOf(1, 3, 5, 7, 9, 2, 4, 6, 8)
+/**
+ * Decodes a Base64 encoded string into a list of possible [ByteArray] results using various decoding flags.
+ *
+ * This function is designed to be highly resilient by attempting to decode the string using multiple strategies:
+ * 1. It extracts the payload if the string is a Data URI (strips the "base64," prefix).
+ * 2. It removes all whitespace characters.
+ * 3. It attempts decoding both with and without manual '=' padding.
+ * 4. It iterates through a list of provided [Base64] flags to find all valid representations.
+ *
+ * This is particularly useful when dealing with Base64 strings from diverse sources where the exact
+ * encoding format (URL-safe vs. Default, Padded vs. Unpadded) might be inconsistent or unknown.
+ *
+ * @param flags A list of [Base64] flag configurations to attempt during decoding.
+ * Defaults to [Base64.DEFAULT], [Base64.NO_WRAP], [Base64.URL_SAFE], and a combination of URL_SAFE/NO_WRAP.
+ * @return A list of successfully decoded [ByteArray] objects. Returns an empty list if no decoding attempt succeeds.
+ */
+fun String.decodeBase64ToByteArrays(
+    flags: List<Int> = listOf(
+        Base64.DEFAULT,
+        Base64.NO_WRAP,
+        Base64.URL_SAFE,
+        Base64.URL_SAFE or Base64.NO_WRAP
+    )
+): List<ByteArray> {
 
-internal fun String.shuffle(seed: IntArray = FY_SEED): String =
-    encodeToBase64().computeShuffle(seed)
-
-internal fun String.unShuffle(seed: IntArray = FY_SEED): String =
-    computeShuffle(seed, true).decodeFromBase64()
-
-private fun String.computeShuffle(seed: IntArray, unShuffle: Boolean = false): String {
-
-    val items = mutableMapOf<Int, String?>()
-    this.toCharArray().forEachIndexed { index, character -> items[index] = character.toString() }
-
-    val iterator = mutableListOf<Int>()
-    items.forEach { iterator.add(it.key) }
-
-    if (unShuffle) iterator.reverse()
-
-    iterator.forEach { i ->
-
-        val k = seed[i % seed.size] % items.size
-
-        val element1 = items[k]
-        val element2 = items[i]
-
-        items[k] = element2
-        items[i] = element1
+    fun String.extractBase64Payload(): String {
+        return substringAfter(delimiter = "base64,", missingDelimiterValue = this)
     }
 
-    return items.map { it.value }.joinToString(separator = "")
+    fun String.removeWhitespace(): String {
+        return filterNot { character ->
+            character.isWhitespace()
+        }
+    }
+
+    fun String.withBase64Padding(): String {
+        val missingPadding = (4 - length % 4) % 4
+
+        return if (missingPadding == 0) {
+            this
+        } else {
+            this + "=".repeat(missingPadding)
+        }
+    }
+
+    return runCatching {
+        val sanitizedBase64 = this
+            .extractBase64Payload()
+            .removeWhitespace()
+            .takeIf { base64 -> base64.isNotBlank() }
+            ?: return emptyList()
+
+        val candidates = listOf(
+            sanitizedBase64,
+            sanitizedBase64.withBase64Padding()
+        ).distinct()
+
+        candidates
+            .flatMap { candidate ->
+                flags.map { flag ->
+                    candidate to flag
+                }
+            }
+            .mapNotNull { (candidate, flag) ->
+                runCatching {
+                    candidate.decodeFromBase64(flag)
+                }.getOrNull()
+            }
+    }.getOrDefault(emptyList())
 }

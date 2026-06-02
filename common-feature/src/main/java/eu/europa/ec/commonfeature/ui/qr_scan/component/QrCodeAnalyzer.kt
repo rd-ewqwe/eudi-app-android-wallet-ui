@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -36,7 +36,8 @@ class QrCodeAnalyzer(
     )
 
     override fun analyze(image: ImageProxy) {
-        if (image.format in supportedImageFormats) {
+        try {
+            if (image.format !in supportedImageFormats) return
             val plane = image.planes.first()
             val bytes = plane.buffer.toByteArray()
             val source = PlanarYUVLuminanceSource(
@@ -50,14 +51,11 @@ class QrCodeAnalyzer(
                 false
             )
             val binaryBmp = BinaryBitmap(HybridBinarizer(source))
-            try {
-                val result = QRCodeReader().decode(binaryBmp)
-                onQrCodeScanned(result.text)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                image.close()
-            }
+            val result = QRCodeReader().decode(binaryBmp)
+            onQrCodeScanned(result.text)
+        } catch (_: Exception) {
+        } finally {
+            image.close()
         }
     }
 

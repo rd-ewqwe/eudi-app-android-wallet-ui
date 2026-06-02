@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -51,7 +51,8 @@ import eu.europa.ec.uilogic.component.wrap.StickyBottomType
 import eu.europa.ec.uilogic.component.wrap.WrapExpandableListItem
 import eu.europa.ec.uilogic.component.wrap.WrapStickyBottomContent
 import eu.europa.ec.uilogic.extension.applyTestTag
-import eu.europa.ec.uilogic.extension.cacheDeepLink
+import eu.europa.ec.uilogic.extension.cacheUri
+import eu.europa.ec.uilogic.extension.findActivity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
@@ -111,7 +112,7 @@ fun DocumentSuccessScreen(
                     }
 
                     is Effect.Navigation.DeepLink -> {
-                        context.cacheDeepLink(navigationEffect.link)
+                        context.cacheUri(navigationEffect.link)
                         navigationEffect.routeToPop?.let {
                             navController.popBackStack(
                                 route = it,
@@ -121,6 +122,15 @@ fun DocumentSuccessScreen(
                     }
 
                     is Effect.Navigation.Pop -> navController.popBackStack()
+
+                    is Effect.Navigation.FinishWithResult -> {
+                        context.findActivity().let { activity ->
+                            navigationEffect.intent.let { intent ->
+                                activity.setResult(navigationEffect.resultCode, intent)
+                                activity.finish()
+                            }
+                        }
+                    }
                 }
             },
             paddingValues = paddingValues

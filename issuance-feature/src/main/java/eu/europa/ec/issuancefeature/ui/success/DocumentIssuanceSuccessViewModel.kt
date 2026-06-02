@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,6 +16,7 @@
 
 package eu.europa.ec.issuancefeature.ui.success
 
+import android.content.Intent
 import androidx.lifecycle.viewModelScope
 import eu.europa.ec.commonfeature.config.IssuanceSuccessUiConfig
 import eu.europa.ec.commonfeature.ui.document_success.DocumentSuccessViewModel
@@ -72,6 +73,10 @@ class DocumentIssuanceSuccessViewModel(
                 }
             }
         }
+    }
+
+    override fun getPendingIntent(): Intent? {
+        return null
     }
 
     private fun getDeserializedIssuanceSuccessUiConfig(): IssuanceSuccessUiConfig {

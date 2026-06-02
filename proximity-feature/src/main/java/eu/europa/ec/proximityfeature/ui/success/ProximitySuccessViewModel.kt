@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,9 +16,10 @@
 
 package eu.europa.ec.proximityfeature.ui.success
 
+import android.content.Intent
 import androidx.lifecycle.viewModelScope
 import eu.europa.ec.commonfeature.ui.document_success.DocumentSuccessViewModel
-import eu.europa.ec.corelogic.di.getOrCreatePresentationScope
+import eu.europa.ec.corelogic.di.getOrNullKoinScope
 import eu.europa.ec.proximityfeature.interactor.ProximitySuccessInteractor
 import eu.europa.ec.proximityfeature.interactor.ProximitySuccessInteractorGetUiItemsPartialState
 import eu.europa.ec.uilogic.config.ConfigNavigation
@@ -75,9 +76,13 @@ class ProximitySuccessViewModel(
         }
     }
 
+    override fun getPendingIntent(): Intent? {
+        return null
+    }
+
     override fun onCleared() {
         super.onCleared()
         interactor.stopPresentation()
-        getOrCreatePresentationScope(presentationScopeId).close()
+        getOrNullKoinScope(presentationScopeId)?.close()
     }
 }

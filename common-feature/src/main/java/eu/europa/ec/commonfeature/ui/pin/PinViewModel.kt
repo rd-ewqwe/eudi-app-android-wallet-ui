@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -17,9 +17,8 @@
 package eu.europa.ec.commonfeature.ui.pin
 
 import androidx.lifecycle.viewModelScope
-import eu.europa.ec.businesslogic.validator.Form
-import eu.europa.ec.businesslogic.validator.FormValidationResult
-import eu.europa.ec.businesslogic.validator.Rule
+import eu.europa.ec.authenticationlogic.provider.PinLockoutState
+import eu.europa.ec.authenticationlogic.secure.SecurePin
 import eu.europa.ec.commonfeature.config.IssuanceFlowType
 import eu.europa.ec.commonfeature.config.IssuanceUiConfig
 import eu.europa.ec.commonfeature.config.SuccessUIConfig
@@ -44,6 +43,7 @@ import eu.europa.ec.uilogic.navigation.ModuleRoute
 import eu.europa.ec.uilogic.navigation.helper.generateComposableArguments
 import eu.europa.ec.uilogic.navigation.helper.generateComposableNavigationLink
 import eu.europa.ec.uilogic.serializer.UiSerializer
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
@@ -60,16 +60,15 @@ data class State(
     val isLoading: Boolean = false,
     val isButtonEnabled: Boolean = false,
     val quickPinError: String? = null,
-    val validationResult: FormValidationResult = FormValidationResult(false),
     val subtitle: String = "",
     val title: String = "",
-    val pin: String = "",
-    val enteredPin: String = "",
     val buttonText: String = "",
     val resetPin: Boolean = false,
     val pinState: PinValidationState,
     val isBottomSheetOpen: Boolean = false,
-    val quickPinSize: Int = 6
+    val quickPinSize: Int = 6,
+    val isLockedOut: Boolean = false,
+    val lockoutMessage: String? = null
 ) : ViewState {
     val action: ScreenNavigateAction
         get() {
@@ -89,8 +88,9 @@ data class State(
 }
 
 sealed class Event : ViewEvent {
-    data class NextButtonPressed(val pin: String) : Event()
-    data class OnQuickPinEntered(val quickPin: String) : Event()
+    data object Init : Event()
+    data class NextButtonPressed(val pin: SecurePin) : Event()
+    data class OnQuickPinLengthChanged(val length: Int) : Event()
     data object CancelPressed : Event()
     data object Finish : Event()
     sealed class BottomSheet : Event() {
@@ -123,6 +123,9 @@ class PinViewModel(
     private val uiSerializer: UiSerializer,
     @InjectedParam private val pinFlow: PinFlow
 ) : MviViewModel<Event, State, Effect>() {
+
+    private var enteredPin: SecurePin? = null
+    private var lockoutTickJob: Job? = null
 
     override fun setInitialState(): State {
         val title: String
@@ -159,12 +162,27 @@ class PinViewModel(
 
     override fun handleEvents(event: Event) {
         when (event) {
-            is Event.OnQuickPinEntered -> {
-                validateForm(event.quickPin)
+            is Event.Init -> {
+                if (viewState.value.pinState != PinValidationState.VALIDATE) return
+                viewModelScope.launch {
+                    when (val lockoutState = interactor.getPinLockoutState()) {
+                        is PinLockoutState.Active -> startLockoutTick(lockoutState.remaining.inWholeMilliseconds)
+                        PinLockoutState.Idle -> Unit
+                    }
+                }
+            }
+
+            is Event.OnQuickPinLengthChanged -> {
+                if (viewState.value.isLockedOut) return
+                validatePinLength(event.length)
             }
 
             is Event.NextButtonPressed -> {
                 val state = viewState.value
+                if (state.isLockedOut) {
+                    event.pin.close()
+                    return
+                }
 
                 when (state.pinState) {
                     PinValidationState.ENTER -> {
@@ -174,16 +192,17 @@ class PinViewModel(
 
                     PinValidationState.REENTER -> {
                         // Save the new pin
-                        saveNewPin(newPin = state.pin, enteredPin = state.enteredPin)
+                        saveNewPin(newPin = event.pin)
                     }
 
                     PinValidationState.VALIDATE -> {
-                        validatePin(currentPin = state.pin)
+                        validatePin(currentPin = event.pin)
                     }
                 }
             }
 
             is Event.CancelPressed -> {
+                clearPendingPin()
                 showBottomSheet()
             }
 
@@ -199,31 +218,55 @@ class PinViewModel(
 
             is Event.BottomSheet.Cancel.SecondaryButtonPressed -> {
                 viewModelScope.launch {
+                    clearPendingPin()
                     hideBottomSheet()
                     delay(200L)
                     setEffect { Effect.Navigation.Pop }
                 }
             }
 
-            is Event.Finish -> setEffect { Effect.Navigation.Finish }
+            is Event.Finish -> {
+                clearPendingPin()
+                setEffect { Effect.Navigation.Finish }
+            }
         }
     }
 
-    private fun validatePin(currentPin: String) {
+    override fun onCleared() {
+        clearPendingPin()
+        lockoutTickJob?.cancel()
+        lockoutTickJob = null
+        super.onCleared()
+    }
+
+    private fun validatePin(currentPin: SecurePin) {
+        setState { copy(isLoading = true) }
         viewModelScope.launch {
             interactor.isCurrentPinValid(
                 pin = currentPin
             ).collect {
                 when (it) {
                     is QuickPinInteractorPinValidPartialState.Failed -> {
-                        setState {
-                            copy(
-                                quickPinError = it.errorMessage
-                            )
+                        when (val lockoutState = interactor.recordPinFailure()) {
+                            is PinLockoutState.Active -> {
+                                setState { copy(isLoading = false) }
+                                startLockoutTick(lockoutState.remaining.inWholeMilliseconds)
+                            }
+
+                            PinLockoutState.Idle -> {
+                                setState {
+                                    copy(
+                                        quickPinError = it.errorMessage,
+                                        isLoading = false
+                                    )
+                                }
+                            }
                         }
                     }
 
                     QuickPinInteractorPinValidPartialState.Success -> {
+                        interactor.resetPinThrottle()
+                        stopLockoutTick()
                         setupEnterPhase()
                     }
                 }
@@ -233,52 +276,61 @@ class PinViewModel(
 
     private fun setupEnterPhase() {
         val newPinState = PinValidationState.ENTER
-
         setState {
             copy(
                 quickPinError = null,
-                enteredPin = "",
                 pinState = newPinState,
                 buttonText = calculateButtonText(newPinState),
-                pin = "",
+                isButtonEnabled = false,
                 resetPin = true,
-                subtitle = calculateSubtitle(newPinState)
+                subtitle = calculateSubtitle(newPinState),
+                isLoading = false
             )
         }
     }
 
-    private fun setupReenterPhase(enteredPin: String) {
+    private fun setupReenterPhase(enteredPin: SecurePin) {
         val newPinState = PinValidationState.REENTER
-
+        replacePendingPin(enteredPin)
         setState {
             copy(
                 quickPinError = null,
-                enteredPin = enteredPin,
                 pinState = PinValidationState.REENTER,
                 buttonText = calculateButtonText(newPinState),
-                pin = "",
+                isButtonEnabled = false,
                 resetPin = true,
-                subtitle = calculateSubtitle(newPinState)
+                subtitle = calculateSubtitle(newPinState),
+                isLoading = false
             )
         }
     }
 
-    private fun saveNewPin(newPin: String, enteredPin: String) {
+    private fun saveNewPin(newPin: SecurePin) {
+
+        val initialPin = enteredPin ?: run {
+            newPin.close()
+            return
+        }
+
+        setState { copy(isLoading = true) }
+
         viewModelScope.launch {
             interactor.setPin(
                 newPin = newPin,
-                initialPin = enteredPin
+                initialPin = initialPin
             ).collect {
                 when (it) {
                     is QuickPinInteractorSetPinPartialState.Failed -> {
                         setState {
                             copy(
-                                quickPinError = it.errorMessage
+                                quickPinError = it.errorMessage,
+                                isLoading = false
                             )
                         }
                     }
 
                     is QuickPinInteractorSetPinPartialState.Success -> {
+                        clearPendingPin()
                         setEffect {
                             Effect.Navigation.SwitchScreen(getNextScreenRoute())
                         }
@@ -288,36 +340,66 @@ class PinViewModel(
         }
     }
 
-    private fun getListOfRules(pin: String): Form {
-        return Form(
-            mapOf(
-                listOf(
-                    Rule.ValidateStringRange(
-                        viewState.value.quickPinSize..viewState.value.quickPinSize,
-                        ""
-                    ),
-                    Rule.ValidateRegex(
-                        "-?\\d+(\\.\\d+)?".toRegex(),
-                        resourceProvider.getString(R.string.quick_pin_numerical_rule_invalid_error_message)
-                    )
-                ) to pin
+    private fun validatePinLength(length: Int) {
+        setState {
+            copy(
+                isButtonEnabled = length == quickPinSize && !isLockedOut,
+                quickPinError = null,
+                resetPin = false
             )
-        )
+        }
     }
 
-    private fun validateForm(pin: String) {
-        viewModelScope.launch {
-            val validationResult = interactor.validateForm(getListOfRules(pin))
-            setState {
-                copy(
-                    validationResult = validationResult,
-                    isButtonEnabled = validationResult.isValid,
-                    quickPinError = validationResult.message,
-                    pin = pin,
-                    resetPin = false
-                )
-            }
+    private fun startLockoutTick(initialRemainingMs: Long) {
+        lockoutTickJob?.cancel()
+        if (initialRemainingMs <= 0L) {
+            stopLockoutTick()
+            return
         }
+        setState {
+            copy(
+                isLockedOut = true,
+                isLoading = false,
+                quickPinError = null,
+                isButtonEnabled = false,
+                lockoutMessage = buildLockoutMessage(initialRemainingMs)
+            )
+        }
+        lockoutTickJob = viewModelScope.launch {
+            var remaining = initialRemainingMs
+            while (remaining > 0L) {
+                delay(1_000L)
+                remaining -= 1_000L
+                if (remaining <= 0L) break
+                setState {
+                    copy(lockoutMessage = buildLockoutMessage(remaining))
+                }
+            }
+            stopLockoutTick()
+        }
+    }
+
+    private fun stopLockoutTick() {
+        lockoutTickJob?.cancel()
+        lockoutTickJob = null
+        setState {
+            copy(
+                isLockedOut = false,
+                lockoutMessage = null
+            )
+        }
+    }
+
+    private fun buildLockoutMessage(remainingMs: Long): String {
+        val totalSeconds = ((remainingMs + 999L) / 1000L).coerceAtLeast(0L)
+        val minutes = totalSeconds / 60L
+        val seconds = totalSeconds % 60L
+        val mmss = "%02d:%02d".format(minutes, seconds)
+        return resourceProvider.getString(
+            R.string.quick_pin_locked_out,
+            interactor.maxFailedPinAttempts,
+            mmss
+        )
     }
 
     private fun calculateSubtitle(pinState: PinValidationState): String {
@@ -453,5 +535,15 @@ class PinViewModel(
         setEffect {
             Effect.CloseBottomSheet
         }
+    }
+
+    private fun replacePendingPin(pin: SecurePin) {
+        clearPendingPin()
+        enteredPin = pin
+    }
+
+    private fun clearPendingPin() {
+        enteredPin?.close()
+        enteredPin = null
     }
 }

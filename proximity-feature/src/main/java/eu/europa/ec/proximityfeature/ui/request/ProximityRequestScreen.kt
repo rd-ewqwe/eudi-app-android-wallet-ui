@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -14,10 +14,11 @@
  * governing permissions and limitations under the Licence.
  */
 
+package eu.europa.ec.proximityfeature.ui.request
+
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
 import eu.europa.ec.commonfeature.ui.request.RequestScreen
-import eu.europa.ec.proximityfeature.ui.request.ProximityRequestViewModel
 
 @Composable
 fun ProximityRequestScreen(
@@ -25,6 +26,7 @@ fun ProximityRequestScreen(
     viewModel: ProximityRequestViewModel
 ) {
     RequestScreen(
+        intentAction = null,
         navController = navController,
         viewModel = viewModel
     )

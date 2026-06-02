@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,12 +16,14 @@
 
 package eu.europa.ec.commonfeature.interactor
 
+import eu.europa.ec.authenticationlogic.config.AuthenticationConfig
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricAuthenticationController
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAuthenticate
-import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
 import eu.europa.ec.authenticationlogic.controller.storage.BiometryStorageController
+import eu.europa.ec.authenticationlogic.controller.throttle.PinThrottleController
+import eu.europa.ec.authenticationlogic.provider.PinLockoutState
+import eu.europa.ec.authenticationlogic.secure.SecurePinImpl
 import eu.europa.ec.testfeature.util.mockedNotifyOnAuthenticationFailure
-import eu.europa.ec.testlogic.base.TestApplication
 import eu.europa.ec.testlogic.base.getMockedContext
 import eu.europa.ec.testlogic.extension.runFlowTest
 import eu.europa.ec.testlogic.extension.runTest
@@ -39,10 +41,8 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = TestApplication::class)
 class TestBiometricInteractor {
 
     @get:Rule
@@ -57,6 +57,12 @@ class TestBiometricInteractor {
     @Mock
     private lateinit var quickPinInteractor: QuickPinInteractor
 
+    @Mock
+    private lateinit var pinThrottleController: PinThrottleController
+
+    @Mock
+    private lateinit var authenticationConfig: AuthenticationConfig
+
     private lateinit var interactor: BiometricInteractor
 
     private lateinit var closeable: AutoCloseable
@@ -68,7 +74,9 @@ class TestBiometricInteractor {
         interactor = BiometricInteractorImpl(
             biometryStorageController = biometryStorageController,
             biometricAuthenticationController = biometricAuthenticationController,
-            quickPinInteractor = quickPinInteractor
+            quickPinInteractor = quickPinInteractor,
+            pinThrottleController = pinThrottleController,
+            authenticationConfig = authenticationConfig
         )
     }
 
@@ -86,12 +94,13 @@ class TestBiometricInteractor {
     fun `Given isCurrentPinValid returns state Success, When isPinValid is called, Then assert the result is the expected`() =
         coroutineRule.runTest {
             // Given
-            whenever(quickPinInteractor.isCurrentPinValid(mockedPin)).thenReturn(
+            val pin = SecurePinImpl(mockedPin)
+            whenever(quickPinInteractor.isCurrentPinValid(pin)).thenReturn(
                 QuickPinInteractorPinValidPartialState.Success.toFlow()
             )
 
             // When
-            interactor.isPinValid(mockedPin).runFlowTest {
+            interactor.isPinValid(pin).runFlowTest {
                 // Then
                 val expectedResult = QuickPinInteractorPinValidPartialState.Success
                 assertEquals(expectedResult, awaitItem())
@@ -118,33 +127,35 @@ class TestBiometricInteractor {
     // When getUseBiometricsAuth returns true, the expected result of getBiometricUserSelection
     // should be true
     @Test
-    fun `When getBiometricUserSelection is called, Then assert the correct value is returned`() {
-        // Given
-        whenever(biometryStorageController.getUseBiometricsAuth()).thenReturn(true)
+    fun `When getBiometricUserSelection is called, Then assert the correct value is returned`() =
+        coroutineRule.runTest {
+            // Given
+            whenever(biometryStorageController.getUseBiometricsAuth()).thenReturn(true)
 
-        // When
-        val result = interactor.getBiometricUserSelection()
+            // When
+            val result = interactor.getBiometricUserSelection()
 
-        // Then
-        assertEquals(true, result)
-        verify(biometryStorageController).getUseBiometricsAuth()
-    }
+            // Then
+            assertEquals(true, result)
+            verify(biometryStorageController).getUseBiometricsAuth()
+        }
     //endregion
 
     //region storeBiometricsUsageDecision
 
     // Case: storeBiometricsUsageDecision behaviour
     @Test
-    fun `When storeBiometricsUsageDecision is called, Then verify setUseBiometricsAuth is executed`() {
-        // Given
-        val shouldUseBiometrics = true
+    fun `When storeBiometricsUsageDecision is called, Then verify setUseBiometricsAuth is executed`() =
+        coroutineRule.runTest {
+            // Given
+            val shouldUseBiometrics = true
 
-        // When
-        interactor.storeBiometricsUsageDecision(shouldUseBiometrics = shouldUseBiometrics)
+            // When
+            interactor.storeBiometricsUsageDecision(shouldUseBiometrics = shouldUseBiometrics)
 
-        // Then
-        verify(biometryStorageController).setUseBiometricsAuth(shouldUseBiometrics)
-    }
+            // Then
+            verify(biometryStorageController).setUseBiometricsAuth(shouldUseBiometrics)
+        }
     //endregion
 
     //region getBiometricsAvailability
@@ -152,14 +163,11 @@ class TestBiometricInteractor {
     // Case: getBiometricsAvailability behaviour
     @Test
     fun `When getBiometricsAvailability is called, Then verify deviceSupportsBiometrics is executed`() {
-        // Given
-        val mockListener: (BiometricsAvailability) -> Unit = mock()
-
         // When
-        interactor.getBiometricsAvailability(mockListener)
+        interactor.getBiometricsAvailability()
 
         // Then
-        verify(biometricAuthenticationController).deviceSupportsBiometrics(mockListener)
+        verify(biometricAuthenticationController).getBiometricsAvailability()
     }
     //endregion
 
@@ -188,6 +196,61 @@ class TestBiometricInteractor {
             mockListener
         )
     }
+    //endregion
+
+    //region pin throttle delegation
+
+    @Test
+    fun `When maxFailedPinAttempts is accessed, Then it returns authenticationConfig#maxFailedPinAttempts`() {
+        // Given
+        whenever(authenticationConfig.maxFailedPinAttempts).thenReturn(5)
+
+        // When
+        val result = interactor.maxFailedPinAttempts
+
+        // Then
+        assertEquals(5, result)
+    }
+
+    @Test
+    fun `When getPinLockoutState is called, Then pinThrottleController#getState is invoked and its result is returned`() =
+        coroutineRule.runTest {
+            // Given
+            val expected = PinLockoutState.Idle
+            whenever(pinThrottleController.getState()).thenReturn(expected)
+
+            // When
+            val result = interactor.getPinLockoutState()
+
+            // Then
+            assertEquals(expected, result)
+            verify(pinThrottleController).getState()
+        }
+
+    @Test
+    fun `When recordPinFailure is called, Then pinThrottleController#recordFailure is invoked and its result is returned`() =
+        coroutineRule.runTest {
+            // Given
+            val expected = PinLockoutState.Idle
+            whenever(pinThrottleController.recordFailure()).thenReturn(expected)
+
+            // When
+            val result = interactor.recordPinFailure()
+
+            // Then
+            assertEquals(expected, result)
+            verify(pinThrottleController).recordFailure()
+        }
+
+    @Test
+    fun `When resetPinThrottle is called, Then pinThrottleController#recordSuccess is invoked`() =
+        coroutineRule.runTest {
+            // When
+            interactor.resetPinThrottle()
+
+            // Then
+            verify(pinThrottleController).recordSuccess()
+        }
     //endregion
 
     //region Mocked objects

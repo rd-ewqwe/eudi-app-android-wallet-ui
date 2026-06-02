@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -28,6 +28,7 @@ import eu.europa.ec.commonfeature.config.PresentationMode
 import eu.europa.ec.commonfeature.config.RequestUriConfig
 import eu.europa.ec.eudi.wallet.document.DocumentId
 import eu.europa.ec.issuancefeature.di.getOrCreateCredentialOfferScope
+import eu.europa.ec.issuancefeature.di.getOrNullCredentialOfferScope
 import eu.europa.ec.issuancefeature.interactor.DocumentOfferInteractor
 import eu.europa.ec.issuancefeature.interactor.IssueDocumentsInteractorPartialState
 import eu.europa.ec.issuancefeature.interactor.ResolveDocumentOfferInteractorPartialState
@@ -382,7 +383,7 @@ class DocumentOfferViewModel(
     }
 
     override fun onCleared() {
-        getOrCreateCredentialOfferScope().close()
+        getOrNullCredentialOfferScope()?.close()
         super.onCleared()
     }
 

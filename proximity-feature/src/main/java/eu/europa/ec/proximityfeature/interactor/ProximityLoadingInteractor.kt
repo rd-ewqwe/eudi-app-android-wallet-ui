@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -69,7 +69,8 @@ class ProximityLoadingInteractorImpl(
                     error = response.error
                 )
 
-                is WalletCorePartialState.Redirect -> null
+                is WalletCorePartialState.Redirect,
+                is WalletCorePartialState.IntentToSend -> null
 
                 is WalletCorePartialState.Success -> ProximityLoadingObserveResponsePartialState.Success
                 is WalletCorePartialState.UserAuthenticationRequired -> {
@@ -88,24 +89,22 @@ class ProximityLoadingInteractorImpl(
         notifyOnAuthenticationFailure: Boolean,
         resultHandler: DeviceAuthenticationResult,
     ) {
-        deviceAuthenticationInteractor.getBiometricsAvailability {
-            when (it) {
-                is BiometricsAvailability.CanAuthenticate -> {
-                    deviceAuthenticationInteractor.authenticateWithBiometrics(
-                        context = context,
-                        crypto = crypto,
-                        notifyOnAuthenticationFailure = notifyOnAuthenticationFailure,
-                        resultHandler = resultHandler
-                    )
-                }
+        when (deviceAuthenticationInteractor.getBiometricsAvailability()) {
+            is BiometricsAvailability.CanAuthenticate -> {
+                deviceAuthenticationInteractor.authenticateWithBiometrics(
+                    context = context,
+                    crypto = crypto,
+                    notifyOnAuthenticationFailure = notifyOnAuthenticationFailure,
+                    resultHandler = resultHandler
+                )
+            }
 
-                is BiometricsAvailability.NonEnrolled -> {
-                    deviceAuthenticationInteractor.launchBiometricSystemScreen()
-                }
+            is BiometricsAvailability.NonEnrolled -> {
+                deviceAuthenticationInteractor.launchBiometricSystemScreen()
+            }
 
-                is BiometricsAvailability.Failure -> {
-                    resultHandler.onAuthenticationFailure()
-                }
+            is BiometricsAvailability.Failure -> {
+                resultHandler.onAuthenticationFailure()
             }
         }
     }

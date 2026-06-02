@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -20,7 +20,7 @@ import project.convention.logic.config.LibraryModule
 
 private const val KOIN = "*.ksp.*"
 private const val BUILD_CONFIG = "*BuildConfig*"
-private const val SCREEN_COMPOSABLES = "*Screen*"
+private const val SCREEN_COMPOSABLES = "*ScreenKt*"
 private const val MODELS = "eu.europa.ec.*.model"
 private const val DOMAIN_MODELS = "eu.europa.ec.*.domain"
 private const val EXTENSIONS = "eu.europa.ec.*.extension"
@@ -35,6 +35,7 @@ private const val ROUTER_GRAPH = "eu.europa.ec.*.router"
 val koverModules: Map<LibraryModule, KoverExclusionRules> = mapOf(
     LibraryModule.BusinessLogic to KoverExclusionRules.BusinessLogic,
     LibraryModule.UiLogic to KoverExclusionRules.UiLogic,
+    LibraryModule.AuthenticationLogic to KoverExclusionRules.AuthenticationLogic,
     LibraryModule.CommonFeature to KoverExclusionRules.CommonFeature,
     LibraryModule.StartupFeature to KoverExclusionRules.StartupFeature,
     LibraryModule.DashboardFeature to KoverExclusionRules.DashboardFeature,
@@ -76,7 +77,7 @@ sealed interface KoverExclusionRules {
             get() = commonClasses
 
         override val packages: List<String>
-            get() = commonPackages + listOf(
+            get() = listOf(
                 "eu.europa.ec.assemblylogic",
             )
     }
@@ -101,8 +102,7 @@ sealed interface KoverExclusionRules {
             get() = commonPackages + listOf(
                 "eu.europa.ec.uilogic.container",
                 "eu.europa.ec.uilogic.mvi",
-                "eu.europa.ec.uilogic.navigation",
-                "eu.europa.ec.uilogic.serializer",
+                "eu.europa.ec.uilogic.navigation"
             )
     }
 
@@ -111,7 +111,7 @@ sealed interface KoverExclusionRules {
             get() = commonClasses
 
         override val packages: List<String>
-            get() = commonPackages + listOf(
+            get() = listOf(
                 "eu.europa.ec.networklogic"
             )
     }
@@ -169,7 +169,8 @@ sealed interface KoverExclusionRules {
 
         override val packages: List<String>
             get() = commonPackages + listOf(
-                "eu.europa.ec.authenticationlogic"
+                "eu.europa.ec.authenticationlogic.controller",
+                "eu.europa.ec.authenticationlogic.storage",
             )
     }
 
@@ -178,7 +179,7 @@ sealed interface KoverExclusionRules {
             get() = commonClasses
 
         override val packages: List<String>
-            get() = commonPackages + listOf(
+            get() = listOf(
                 "eu.europa.ec.analyticslogic"
             )
     }
@@ -188,7 +189,7 @@ sealed interface KoverExclusionRules {
             get() = commonClasses
 
         override val packages: List<String>
-            get() = commonPackages + listOf(
+            get() = listOf(
                 "eu.europa.ec.corelogic"
             )
     }
@@ -198,7 +199,7 @@ sealed interface KoverExclusionRules {
             get() = commonClasses
 
         override val packages: List<String>
-            get() = commonPackages + listOf(
+            get() = listOf(
                 "eu.europa.ec.storagelogic"
             )
     }

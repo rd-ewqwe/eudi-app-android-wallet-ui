@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -14,8 +14,13 @@
  * governing permissions and limitations under the Licence.
  */
 
-package eu.europa.ec.testlogic.base
+package eu.europa.ec.storagelogic.model
 
-import android.app.Application
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
-class TestApplication : Application()
+@Entity(tableName = "failedReIssuedDocuments")
+data class FailedReIssuedDocument(
+    @PrimaryKey
+    val identifier: String
+)

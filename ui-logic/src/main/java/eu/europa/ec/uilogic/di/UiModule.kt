@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -17,6 +17,7 @@
 package eu.europa.ec.uilogic.di
 
 import eu.europa.ec.analyticslogic.controller.AnalyticsController
+import eu.europa.ec.businesslogic.di.LogicBusinessModule
 import eu.europa.ec.uilogic.config.ConfigUILogic
 import eu.europa.ec.uilogic.config.ConfigUILogicImpl
 import eu.europa.ec.uilogic.navigation.RouterHost
@@ -29,12 +30,12 @@ import org.koin.core.annotation.Factory
 import org.koin.core.annotation.Module
 import org.koin.core.annotation.Single
 
-@Module
+@Module(includes = [LogicBusinessModule::class])
 @Configuration
 @ComponentScan("eu.europa.ec.uilogic")
 class LogicUiModule
 
-@Single
+@Factory
 fun provideRouterHost(
     configUILogic: ConfigUILogic,
     analyticsController: AnalyticsController

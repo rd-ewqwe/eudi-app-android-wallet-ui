@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,6 +16,7 @@
 
 package eu.europa.ec.businesslogic.controller.crypto
 
+import android.content.Context
 import android.util.Base64
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -36,8 +37,7 @@ interface CryptoController {
      *
      * @return A [String] representing the generated code verifier.
      */
-    fun generateCodeVerifier(): String
-
+    suspend fun generateCodeVerifier(): String
 
     /**
      * Retrieves a [Cipher] instance configured for either encryption or decryption.
@@ -62,7 +62,7 @@ interface CryptoController {
      * @return A configured [Cipher] instance if initialization is successful, or `null` if an
      * exception occurs during initialization.
      */
-    fun getCipher(
+    suspend fun getCipher(
         encrypt: Boolean = false,
         ivBytes: ByteArray? = null,
         userAuthenticationRequired: Boolean = true
@@ -75,7 +75,18 @@ interface CryptoController {
      * returned.
      * [byteArray] that needed to be encrypted or decrypted (Depending always on [Cipher] provided.
      */
-    fun encryptDecrypt(cipher: Cipher?, byteArray: ByteArray): ByteArray
+    suspend fun encryptDecrypt(cipher: Cipher?, byteArray: ByteArray): ByteArray
+
+    /**
+     * Generates a random cryptographic key as a byte array.
+     *
+     * This function utilizes [SecureRandom] to generate a high-entropy 32-byte array,
+     * which is then converted into a hexadecimal string and returned as UTF-8 bytes.
+     * This is primarily used for securing sensitive data or generating passphrases.
+     *
+     * @return A [ByteArray] containing the generated hexadecimal key.
+     */
+    suspend fun createRandomKey(context: Context): ByteArray
 }
 
 class CryptoControllerImpl(
@@ -88,7 +99,7 @@ class CryptoControllerImpl(
         const val MAX_GUID_LENGTH = 64
     }
 
-    override fun generateCodeVerifier(): String {
+    override suspend fun generateCodeVerifier(): String {
         val code = ByteArray(32)
         SecureRandom().apply {
             nextBytes(code)
@@ -96,7 +107,7 @@ class CryptoControllerImpl(
         return Base64.encodeToString(code, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
-    override fun getCipher(
+    override suspend fun getCipher(
         encrypt: Boolean,
         ivBytes: ByteArray?,
         userAuthenticationRequired: Boolean
@@ -121,7 +132,17 @@ class CryptoControllerImpl(
         }
 
 
-    override fun encryptDecrypt(cipher: Cipher?, byteArray: ByteArray): ByteArray {
+    override suspend fun encryptDecrypt(cipher: Cipher?, byteArray: ByteArray): ByteArray {
         return cipher?.doFinal(byteArray) ?: ByteArray(0)
+    }
+
+    override suspend fun createRandomKey(context: Context): ByteArray {
+        val hex: String = run {
+            val bytes = ByteArray(32)
+            SecureRandom().nextBytes(bytes)
+            val generated = bytes.joinToString("") { "%02x".format(it) }
+            generated
+        }
+        return hex.toByteArray(Charsets.UTF_8)
     }
 }

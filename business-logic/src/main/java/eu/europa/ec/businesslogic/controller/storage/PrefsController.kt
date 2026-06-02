@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,326 +16,204 @@
 
 package eu.europa.ec.businesslogic.controller.storage
 
-import android.content.Context.MODE_PRIVATE
-import android.content.SharedPreferences
-import androidx.core.content.edit
-import eu.europa.ec.businesslogic.extension.shuffle
-import eu.europa.ec.businesslogic.extension.unShuffle
+import android.content.Context
+import android.util.Base64
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferencesFileSerializer
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.datastore.tink.AeadSerializer
+import com.google.crypto.tink.Aead
+import com.google.crypto.tink.KeyTemplates
+import com.google.crypto.tink.RegistryConfiguration
+import com.google.crypto.tink.aead.AeadConfig
+import com.google.crypto.tink.integration.android.AndroidKeysetManager
+import eu.europa.ec.businesslogic.extension.decodeFromBase64
+import eu.europa.ec.businesslogic.extension.encodeToBase64String
 import eu.europa.ec.resourceslogic.provider.ResourceProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 
 interface PrefsController {
-
-    /**
-     * Defines if [SharedPreferences] contains a value for given [key]. This function will only
-     * identify if a key exists in storage and will not check if corresponding value is valid.
-     *
-     * @param key The name of the preference to check.
-     *
-     * @return `true` if preferences contain given key. `false` otherwise.
-     */
-    fun contains(key: String): Boolean
-
-    /**
-     * Removes given preference key from shared preferences. Notice that this operation is
-     * irreversible and may lead to data loss.
-     */
-    fun clear(key: String)
-
-    /**
-     * Removes all keys from shared preferences. Notice that this operation is
-     * irreversible and may lead to data loss.
-     */
-    fun clear()
-
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    fun setString(key: String, value: String)
-
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    fun setLong(
-        key: String, value: Long
-    )
-
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    fun setBool(key: String, value: Boolean)
-
-    /**
-     * Retrieves a string value from device shared preferences that corresponds to given [key]. If
-     * key does not exist or value of given key is null, [defaultValue] is returned.
-     *
-     * @param key          Key to get corresponding value.
-     * @param defaultValue Default value to return if given [key] does not exist in prefs or if
-     * key value is invalid.
-     */
-    fun getString(key: String, defaultValue: String): String
-
-    /**
-     * Retrieves a long value from device shared preferences that corresponds to given [key]. If
-     * key does not exist or value of given key is null, [defaultValue] is returned.
-     *
-     * @param key          Key to get corresponding value.
-     * @param defaultValue Default value to return if given [key] does not exist in prefs or if
-     * key value is invalid.
-     */
-    fun getLong(key: String, defaultValue: Long): Long
-
-    /**
-     * Retrieves a boolean value from the device's shared preferences associated with the given [key].
-     *
-     * If the [key] is not found in the preferences, or if the value associated with the [key] is null,
-     * the [defaultValue] is returned.  Note that if a value exists for the key but is not a valid
-     * boolean (e.g., a String or an Int), the platform may also return the [defaultValue], depending on
-     * the underlying shared preferences implementation.
-     *
-     * @param key The key used to retrieve the boolean value.
-     * @param defaultValue The boolean value to return if the [key] is not found or has a null value.
-     * @return The boolean value associated with the [key], or the [defaultValue] if the [key] is not found or has a null value.
-     */
-    fun getBool(key: String, defaultValue: Boolean): Boolean
-
-    /**
-     * Sets an integer value associated with the given key in the underlying data store.
-     * If a value already exists for the key, it will be overwritten.
-     *
-     * @param key The unique identifier for the integer value.  Must not be null or empty.
-     * @param value The integer value to store.
-     */
-    fun setInt(key: String, value: Int)
-
-    /**
-     * Retrieves an integer value associated with the given key from a data source.
-     * If the key is not found or the value is not an integer, it returns the specified default value.
-     *
-     * @param key The key associated with the integer value to retrieve.
-     * @param defaultValue The default integer value to return if the key is not found or the value is not an integer.
-     * @return The integer value associated with the key, or the default value if the key is not found or the value is invalid.
-     */
-    fun getInt(key: String, defaultValue: Int): Int
+    suspend fun contains(key: String): Boolean
+    suspend fun clear(key: String)
+    suspend fun clear()
+    suspend fun setString(key: String, value: String)
+    suspend fun setLong(key: String, value: Long)
+    suspend fun setBool(key: String, value: Boolean)
+    suspend fun getString(key: String, defaultValue: String): String
+    suspend fun getLong(key: String, defaultValue: Long): Long
+    suspend fun getBool(key: String, defaultValue: Boolean): Boolean
+    suspend fun setInt(key: String, value: Int)
+    suspend fun getInt(key: String, defaultValue: Int): Int
 }
 
 /**
- * Implementation of the [PrefsController] interface for managing application preferences.
+ * Implementation of [PrefsController] that provides a secure, encrypted key-value storage
+ * using Jetpack DataStore and Google Tink for Authenticated Encryption with Associated Data (AEAD).
  *
- * This class provides methods for storing and retrieving various data types (String, Long, Boolean, Int)
- * in the application's SharedPreferences.  All SharedPreferences are
- * stored within a file named "eudi-wallet" accessible only to this application.
+ * This class handles the persistence of primitive types (String, Long, Boolean, Int) and ensures
+ * that the underlying data is encrypted at rest using a master key stored in the Android Keystore.
  *
- * @property resourceProvider An instance of [ResourceProvider] used to access application resources,
- *                           including the application context for obtaining SharedPreferences.
+ * All operations are exposed as suspend functions and executed by DataStore on its IO-backed scope.
+ *
+ * @property resourceProvider An instance of [ResourceProvider] used to access the application context.
  */
 class PrefsControllerImpl(
     private val resourceProvider: ResourceProvider
 ) : PrefsController {
 
-
-    /**
-     * Retrieves the SharedPreferences instance for the application.
-     *
-     * This function provides access to the SharedPreferences object used by the application
-     * for persistent storage of key-value pairs. The SharedPreferences are named "eudi-wallet"
-     * and are accessed with private mode, meaning only this application can read or write to them.
-     *
-     * @return The SharedPreferences instance.
-     */
-    private fun getSharedPrefs(): SharedPreferences {
-        return resourceProvider.provideContext().getSharedPreferences("eudi-wallet", MODE_PRIVATE)
+    private companion object {
+        const val DATASTORE_FILE = "eudi-wallet.preferences_pb"
+        const val KEYSET_PREFS_FILE = "eudi-wallet-datastore-keyset"
+        const val KEYSET_PREFS_KEY = "prefs_datastore_keyset"
+        const val MASTER_KEY_URI = "android-keystore://eudi-wallet-datastore-master-key"
     }
 
-    /**
-     * Defines if [SharedPreferences] contains a value for given [key]. This function will only
-     * identify if a key exists in storage and will not check if corresponding value is valid.
-     *
-     * @param key The name of the preference to check.
-     *
-     * @return `true` if preferences contain given key. `false` otherwise.
-     */
-    override fun contains(key: String): Boolean {
-        return getSharedPrefs().contains(key)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val dataStore: DataStore<Preferences> by lazy {
+        val context = resourceProvider.provideContext().applicationContext
+        DataStoreFactory.create(
+            serializer = AeadSerializer(
+                aead = provideAead(context),
+                wrappedSerializer = PreferencesFileSerializer,
+                associatedData = DATASTORE_FILE.toByteArray(Charsets.UTF_8)
+            ),
+            scope = scope,
+            produceFile = { context.preferencesDataStoreFile(DATASTORE_FILE) }
+        )
     }
 
-    /**
-     * Removes given preference key from shared preferences. Notice that this operation is
-     * irreversible and may lead to data loss.
-     */
-    override fun clear(key: String) {
-        getSharedPrefs().edit { remove(key) }
+    override suspend fun contains(key: String): Boolean {
+        val prefs = read()
+        return prefs.asMap().keys.any { it.name == key }
     }
 
-    /**
-     * Removes all keys from shared preferences. Notice that this operation is
-     * irreversible and may lead to data loss.
-     */
-    override fun clear() {
-        getSharedPrefs().edit { clear() }
-    }
-
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    override fun setString(key: String, value: String) {
-        getSharedPrefs().edit {
-            putString(key, value.shuffle())
+    override suspend fun clear(key: String) {
+        edit { prefs ->
+            prefs.remove(stringPreferencesKey(key))
+            prefs.remove(longPreferencesKey(key))
+            prefs.remove(booleanPreferencesKey(key))
+            prefs.remove(intPreferencesKey(key))
         }
     }
 
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    override fun setLong(
-        key: String, value: Long
-    ) {
-        getSharedPrefs().edit {
-            putLong(key, value)
+    override suspend fun clear() {
+        edit { it.clear() }
+    }
+
+    override suspend fun setString(key: String, value: String) {
+        edit { prefs ->
+            prefs[stringPreferencesKey(key)] = value
         }
     }
 
-    /**
-     * Assigns given [value] to device storage - shared preferences given [key]. You can
-     * retrieve this value by calling [getString].
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key   Key used to add given [value].
-     * @param value Value to add after given [key].
-     */
-    override fun setBool(key: String, value: Boolean) {
-        getSharedPrefs().edit {
-            putBoolean(key, value)
+    override suspend fun setLong(key: String, value: Long) {
+        edit { prefs ->
+            prefs[longPreferencesKey(key)] = value
         }
     }
 
-    /**
-     * Retrieves a string value from device shared preferences that corresponds to given [key]. If
-     * key does not exist or value of given key is null, [defaultValue] is returned.
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key          Key to get corresponding value.
-     * @param defaultValue Default value to return if given [key] does not exist in prefs or if
-     * key value is invalid.
-     */
-    override fun getString(key: String, defaultValue: String): String {
-        return getSharedPrefs().getString(key, null)?.unShuffle() ?: defaultValue
-    }
-
-    /**
-     * Retrieves a long value from device shared preferences that corresponds to given [key]. If
-     * key does not exist or value of given key is null, [defaultValue] is returned.
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key          Key to get corresponding value.
-     * @param defaultValue Default value to return if given [key] does not exist in prefs or if
-     * key value is invalid.
-     */
-    override fun getLong(key: String, defaultValue: Long): Long {
-        return getSharedPrefs().getLong(key, defaultValue)
-    }
-
-    /**
-     * Retrieves a boolean value from device shared preferences that corresponds to given [key]. If
-     * key does not exist or value of given key is null, [defaultValue] is returned.
-     *
-     * Shared preferences are encrypted. Do not create your own instance to add or retrieve data.
-     * Instead, call operations of this controller.
-     *
-     * @param key          Key to get corresponding value.
-     * @param defaultValue Default value to return if given [key] does not exist in prefs or if
-     * key value is invalid.
-     */
-    override fun getBool(key: String, defaultValue: Boolean): Boolean {
-        return getSharedPrefs().getBoolean(key, defaultValue)
-    }
-
-    /**
-     * Retrieves an integer value from SharedPreferences associated with the given key.
-     * If no value is found for the key, returns the provided default value.
-     *
-     * @param key The key associated with the integer value to retrieve.
-     * @param defaultValue The default integer value to return if no value is found for the key.
-     * @return The integer value associated with the key, or the default value if no value is found.
-     */
-    override fun getInt(key: String, defaultValue: Int): Int {
-        return getSharedPrefs().getInt(key, defaultValue)
-    }
-
-    /**
-     * Sets an integer value in the shared preferences.
-     *
-     * @param key The key under which the value should be stored.
-     * @param value The integer value to be stored.
-     */
-    override fun setInt(key: String, value: Int) {
-        getSharedPrefs().edit {
-            putInt(key, value)
+    override suspend fun setBool(key: String, value: Boolean) {
+        edit { prefs ->
+            prefs[booleanPreferencesKey(key)] = value
         }
+    }
+
+    override suspend fun setInt(key: String, value: Int) {
+        edit { prefs ->
+            prefs[intPreferencesKey(key)] = value
+        }
+    }
+
+    override suspend fun getString(key: String, defaultValue: String): String {
+        return read()[stringPreferencesKey(key)] ?: defaultValue
+    }
+
+    override suspend fun getLong(key: String, defaultValue: Long): Long {
+        return read()[longPreferencesKey(key)] ?: defaultValue
+    }
+
+    override suspend fun getBool(key: String, defaultValue: Boolean): Boolean {
+        return read()[booleanPreferencesKey(key)] ?: defaultValue
+    }
+
+    override suspend fun getInt(key: String, defaultValue: Int): Int {
+        return read()[intPreferencesKey(key)] ?: defaultValue
+    }
+
+    private suspend fun read(): Preferences = dataStore.data.first()
+
+    private suspend fun edit(block: (MutablePreferences) -> Unit) {
+        dataStore.edit { prefs ->
+            block(prefs)
+        }
+    }
+
+    private fun provideAead(context: Context): Aead {
+
+        AeadConfig.register()
+
+        val keysetHandle = AndroidKeysetManager.Builder()
+            .withSharedPref(context, KEYSET_PREFS_KEY, KEYSET_PREFS_FILE)
+            .withKeyTemplate(KeyTemplates.get("AES256_GCM"))
+            .withMasterKeyUri(MASTER_KEY_URI)
+            .build()
+            .keysetHandle
+
+        return keysetHandle.getPrimitive(
+            RegistryConfiguration.get(),
+            Aead::class.java
+        )
     }
 }
 
 interface PrefKeys {
-    fun getCryptoAlias(): String
-    fun setCryptoAlias(value: String)
+    suspend fun getCryptoAlias(): String
+    suspend fun setCryptoAlias(value: String)
+    suspend fun setSessionId(value: String)
+    suspend fun getSessionId(): String
+    suspend fun setDbKey(value: ByteArray)
+    suspend fun getDbKey(): ByteArray?
 }
 
 class PrefKeysImpl(
     private val prefsController: PrefsController
 ) : PrefKeys {
 
-
-    /**
-     * Retrieves the alias used for cryptographic operations from SharedPreferences.
-     * This alias is typically used to identify a specific key or set of keys
-     * stored in the Android Keystore system.
-     *
-     * @return The crypto alias string. Returns an empty string if the alias is not found
-     *         or has not been set.
-     */
-    override fun getCryptoAlias(): String {
+    override suspend fun getCryptoAlias(): String {
         return prefsController.getString("CryptoAlias", "")
     }
 
-
-    /**
-     * Stores the crypto alias used for the secret key in android keystore.
-     * This is used for cryptographic operations not related to biometrics.
-     *
-     * @param value the crypto alias value.
-     */
-    override fun setCryptoAlias(value: String) {
+    override suspend fun setCryptoAlias(value: String) {
         prefsController.setString("CryptoAlias", value)
+    }
+
+    override suspend fun setSessionId(value: String) {
+        prefsController.setString("SessionId", value)
+    }
+
+    override suspend fun getSessionId(): String {
+        return prefsController.getString("SessionId", "")
+    }
+
+    override suspend fun setDbKey(value: ByteArray) {
+        val encoded = value.encodeToBase64String(flags = Base64.NO_WRAP)
+        prefsController.setString("dbKey", encoded)
+    }
+
+    override suspend fun getDbKey(): ByteArray? {
+        val encoded = prefsController.getString("dbKey", "").ifBlank { return null }
+        return encoded.decodeFromBase64(flags = Base64.NO_WRAP)
     }
 }

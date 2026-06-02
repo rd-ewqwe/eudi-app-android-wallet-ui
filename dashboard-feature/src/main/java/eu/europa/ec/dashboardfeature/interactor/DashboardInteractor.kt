@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -40,7 +40,7 @@ class DashboardInteractorImpl(
                 SideMenuItemUi(
                     type = SideMenuTypeUi.CHANGE_PIN,
                     data = ListItemDataUi(
-                        itemId = resourceProvider.getString(R.string.dashboard_side_menu_option_change_pin_id),
+                        itemId = SideMenuTypeUi.CHANGE_PIN.itemId,
                         mainContentData = ListItemMainContentDataUi.Text(
                             text = resourceProvider.getString(R.string.dashboard_side_menu_option_change_pin)
                         ),
@@ -58,7 +58,7 @@ class DashboardInteractorImpl(
                 SideMenuItemUi(
                     type = SideMenuTypeUi.SETTINGS,
                     data = ListItemDataUi(
-                        itemId = resourceProvider.getString(R.string.dashboard_side_menu_option_settings_id),
+                        itemId = SideMenuTypeUi.SETTINGS.itemId,
                         mainContentData = ListItemMainContentDataUi.Text(
                             text = resourceProvider.getString(R.string.dashboard_side_menu_option_settings)
                         ),

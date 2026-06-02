@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -473,6 +473,30 @@ class TestDocumentIssuanceSuccessInteractor {
                 assertEquals(
                     DocumentIssuanceSuccessInteractorGetUiItemsPartialState.Failed(
                         errorMessage = expectedException.localizedMessage!!
+                    ),
+                    awaitItem()
+                )
+            }
+        }
+    }
+
+    // Case 7B:
+    // Same as Case 7 but the thrown exception has no message, exercising the
+    // `it.localizedMessage ?: genericErrorMsg` elvis fallback and the genericErrorMsg getter.
+    @Test
+    fun `Given Case 7B, When getUiItems is called with no-message exception, Then Failure with generic error is returned`() {
+        coroutineRule.runTest {
+            // Given
+            whenever(resourceProvider.getLocale()).thenThrow(RuntimeException())
+
+            // When
+            interactor.getUiItems(
+                documentIds = listOf(mockedPidId)
+            ).runFlowTest {
+                // Then
+                assertEquals(
+                    DocumentIssuanceSuccessInteractorGetUiItemsPartialState.Failed(
+                        errorMessage = mockedGenericErrorMessage
                     ),
                     awaitItem()
                 )

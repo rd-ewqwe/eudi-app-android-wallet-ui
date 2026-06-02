@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -144,7 +144,8 @@ fun DocumentsScreen(
         },
         broadcastAction = BroadcastAction(
             intentFilters = listOf(
-                CoreActions.REVOCATION_WORK_REFRESH_ACTION
+                CoreActions.REVOCATION_WORK_REFRESH_ACTION,
+                CoreActions.RE_ISSUANCE_WORK_REFRESH_ACTION
             ),
             callback = {
                 viewModel.setEvent(Event.GetDocuments)
@@ -408,7 +409,7 @@ private fun NoResults(
     Column(modifier = modifier) {
         WrapListItem(
             item = ListItemDataUi(
-                itemId = stringResource(R.string.documents_screen_search_no_results_id),
+                itemId = DOCUMENTS_NO_RESULTS_ITEM_ID,
                 mainContentData = ListItemMainContentDataUi.Text(text = stringResource(R.string.documents_screen_search_no_results)),
             ),
             onItemClick = null,
@@ -580,6 +581,8 @@ private fun DocumentsSheetContent(
         }
     }
 }
+
+private const val DOCUMENTS_NO_RESULTS_ITEM_ID = "noResultsId"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @ThemeModePreviews

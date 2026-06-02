@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -72,6 +72,7 @@ import eu.europa.ec.testfeature.util.mockedNotifyOnAuthenticationFailure
 import eu.europa.ec.testfeature.util.mockedPidId
 import eu.europa.ec.testfeature.util.mockedPlainFailureMessage
 import eu.europa.ec.testfeature.util.mockedUriPath1
+import eu.europa.ec.testfeature.util.securePin
 import eu.europa.ec.testlogic.extension.runFlowTest
 import eu.europa.ec.testlogic.extension.runTest
 import eu.europa.ec.testlogic.extension.toFlow
@@ -87,7 +88,6 @@ import org.junit.Test
 import org.mockito.Mock
 import org.mockito.Mockito.mock
 import org.mockito.MockitoAnnotations
-import org.mockito.kotlin.any
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -510,6 +510,112 @@ class TestDocumentOfferInteractor {
         }
     //endregion
 
+    // Case 11:
+    // Offer with txCodeSpec = null. The `safeLet` over `response.offer.txCodeSpec?.inputMode`
+    // and `?.length` returns null → both inner branches are skipped via the safe-call
+    // null path. Combined with hasMainPid = true, the rest of the flow continues to Success.
+    @Test
+    fun `Given Case 11, When resolveDocumentOffer is called with a null txCodeSpec, Then Success is returned`() =
+        coroutineRule.runTest {
+            // Given
+            val mockedOffer = mockOffer(
+                issuerName = mockedIssuerName,
+                offeredDocuments = mockedOfferedDocumentsList,
+                txCodeSpec = null,
+            )
+            mockGetMainPidDocumentCall(mainPid = getMockedMainPid())
+            mockWalletDocumentsControllerResolveOfferEventEmission(
+                event = ResolveDocumentOfferPartialState.Success(mockedOffer)
+            )
+
+            // When
+            interactor.resolveDocumentOffer(mockedUriPath1).runFlowTest {
+                // Then
+                val state = awaitItem()
+                org.junit.Assert.assertTrue(
+                    state is ResolveDocumentOfferInteractorPartialState.Success
+                )
+            }
+        }
+
+    // Case 12:
+    // Offer with txCodeSpec.inputMode = TEXT → the `inputMode == TxCodeInputMode.TEXT` arm of
+    // the `||` returns true → Failure with invalid-txcode-format message.
+    @Test
+    fun `Given Case 12, When resolveDocumentOffer is called with TEXT inputMode, Then Failure with invalid-format message is returned`() =
+        coroutineRule.runTest {
+            // Given
+            val mockedOffer = mockOffer(
+                issuerName = mockedIssuerName,
+                offeredDocuments = mockedOfferedDocumentsList,
+                txCodeSpec = mockOfferTxCodeSpec(
+                    inputMode = TxCodeInputMode.TEXT,
+                    length = 4,
+                ),
+            )
+            mockGetMainPidDocumentCall(mainPid = getMockedMainPid())
+            whenever(
+                resourceProvider.getString(
+                    R.string.issuance_document_offer_error_invalid_txcode_format,
+                    4,
+                    6,
+                )
+            ).thenReturn(mockedInvalidCodeFormatMessage)
+            mockWalletDocumentsControllerResolveOfferEventEmission(
+                event = ResolveDocumentOfferPartialState.Success(mockedOffer)
+            )
+
+            // When
+            interactor.resolveDocumentOffer(mockedUriPath1).runFlowTest {
+                // Then
+                assertEquals(
+                    ResolveDocumentOfferInteractorPartialState.Failure(
+                        errorMessage = mockedInvalidCodeFormatMessage
+                    ),
+                    awaitItem()
+                )
+            }
+        }
+
+    // Case 13:
+    // Offer with txCodeSpec.length out of [4..6] → the `length !in codeMinLength..codeMaxLength`
+    // arm returns true → Failure.
+    @Test
+    fun `Given Case 13, When resolveDocumentOffer is called with txCode length out of range, Then Failure is returned`() =
+        coroutineRule.runTest {
+            // Given
+            val mockedOffer = mockOffer(
+                issuerName = mockedIssuerName,
+                offeredDocuments = mockedOfferedDocumentsList,
+                txCodeSpec = mockOfferTxCodeSpec(
+                    inputMode = TxCodeInputMode.NUMERIC,
+                    length = 8,
+                ),
+            )
+            mockGetMainPidDocumentCall(mainPid = getMockedMainPid())
+            whenever(
+                resourceProvider.getString(
+                    R.string.issuance_document_offer_error_invalid_txcode_format,
+                    4,
+                    6,
+                )
+            ).thenReturn(mockedInvalidCodeFormatMessage)
+            mockWalletDocumentsControllerResolveOfferEventEmission(
+                event = ResolveDocumentOfferPartialState.Success(mockedOffer)
+            )
+
+            // When
+            interactor.resolveDocumentOffer(mockedUriPath1).runFlowTest {
+                // Then
+                assertEquals(
+                    ResolveDocumentOfferInteractorPartialState.Failure(
+                        errorMessage = mockedInvalidCodeFormatMessage
+                    ),
+                    awaitItem()
+                )
+            }
+        }
+
     //region issueDocuments
 
     // Case 1:
@@ -536,7 +642,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 // Then
                 val expectedResult = IssueDocumentsInteractorPartialState.Failure(
@@ -611,7 +717,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 // Then
                 val expectedResult = IssueDocumentsInteractorPartialState.UserAuthRequired(
@@ -647,7 +753,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Success(
                     documentIds = listOf(mockedPidId)
@@ -727,7 +833,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.DeferredSuccess(
                     successRoute = "SUCCESS?successConfig=$mockedRouteArguments"
@@ -802,7 +908,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Success(
                     documentIds = listOf(mockSuccessfullyIssuedDocId)
@@ -851,7 +957,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Success(
                     documentIds = listOf(mockSuccessfullyIssuedDocId),
@@ -888,7 +994,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Failure(
                     errorMessage = mockedExceptionWithMessage.localizedMessage!!
@@ -923,7 +1029,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Failure(
                     errorMessage = mockedGenericErrorMessage
@@ -947,7 +1053,7 @@ class TestDocumentOfferInteractor {
                 offerUri = mockedUriPath1,
                 issuerName = mockedIssuerName,
                 navigation = mockedConfigNavigationTypePop,
-                txCode = mockedTxCode
+                txCode = securePin(mockedTxCode)
             ).runFlowTest {
                 val expectedResult = IssueDocumentsInteractorPartialState.Failure(
                     errorMessage = mockedGenericErrorMessage
@@ -1090,11 +1196,7 @@ class TestDocumentOfferInteractor {
     }
 
     private fun mockBiometricsAvailabilityResponse(response: BiometricsAvailability) {
-        whenever(deviceAuthenticationInteractor.getBiometricsAvailability(listener = any()))
-            .thenAnswer {
-                val bioAvailability = it.getArgument<(BiometricsAvailability) -> Unit>(0)
-                bioAvailability(response)
-            }
+        whenever(deviceAuthenticationInteractor.getBiometricsAvailability()).thenReturn(response)
     }
 
     private fun mockDeferredDocumentsMap(): Map<String, String> {
@@ -1145,7 +1247,6 @@ class TestDocumentOfferInteractor {
             credentialConfigurationsSupported = mapOf(
                 CredentialConfigurationIdentifier("identifier") to MsoMdocCredential(
                     docType = docType,
-                    isoPolicy = null,
                     credentialMetadata = null
                 )
             ),
@@ -1173,7 +1274,6 @@ class TestDocumentOfferInteractor {
             whenever(this.configuration).thenReturn(
                 MsoMdocCredential(
                     docType = mockedOfferedDocumentDocType,
-                    isoPolicy = null,
                     credentialMetadata = CredentialMetadata(display = display)
                 )
             )

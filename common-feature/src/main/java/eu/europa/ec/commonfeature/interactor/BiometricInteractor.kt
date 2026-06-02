@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -17,16 +17,22 @@
 package eu.europa.ec.commonfeature.interactor
 
 import android.content.Context
+import eu.europa.ec.authenticationlogic.config.AuthenticationConfig
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricAuthenticationController
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAuthenticate
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
 import eu.europa.ec.authenticationlogic.controller.storage.BiometryStorageController
+import eu.europa.ec.authenticationlogic.controller.throttle.PinThrottleController
+import eu.europa.ec.authenticationlogic.provider.PinLockoutState
+import eu.europa.ec.authenticationlogic.secure.SecurePin
 import kotlinx.coroutines.flow.Flow
 
 interface BiometricInteractor {
-    fun getBiometricsAvailability(listener: (BiometricsAvailability) -> Unit)
-    fun getBiometricUserSelection(): Boolean
-    fun storeBiometricsUsageDecision(shouldUseBiometrics: Boolean)
+    val maxFailedPinAttempts: Int
+
+    fun getBiometricsAvailability(): BiometricsAvailability
+    suspend fun getBiometricUserSelection(): Boolean
+    suspend fun storeBiometricsUsageDecision(shouldUseBiometrics: Boolean)
     fun authenticateWithBiometrics(
         context: Context,
         notifyOnAuthenticationFailure: Boolean,
@@ -34,28 +40,47 @@ interface BiometricInteractor {
     )
 
     fun launchBiometricSystemScreen()
-    fun isPinValid(pin: String): Flow<QuickPinInteractorPinValidPartialState>
+    fun isPinValid(pin: SecurePin): Flow<QuickPinInteractorPinValidPartialState>
+
+    suspend fun getPinLockoutState(): PinLockoutState
+    suspend fun recordPinFailure(): PinLockoutState
+    suspend fun resetPinThrottle()
 }
 
 class BiometricInteractorImpl(
     private val biometryStorageController: BiometryStorageController,
     private val biometricAuthenticationController: BiometricAuthenticationController,
     private val quickPinInteractor: QuickPinInteractor,
+    private val pinThrottleController: PinThrottleController,
+    private val authenticationConfig: AuthenticationConfig,
 ) : BiometricInteractor {
 
-    override fun isPinValid(pin: String): Flow<QuickPinInteractorPinValidPartialState> =
+    override val maxFailedPinAttempts: Int
+        get() = authenticationConfig.maxFailedPinAttempts
+
+    override fun isPinValid(pin: SecurePin): Flow<QuickPinInteractorPinValidPartialState> =
         quickPinInteractor.isCurrentPinValid(pin)
 
-    override fun storeBiometricsUsageDecision(shouldUseBiometrics: Boolean) {
+    override suspend fun getPinLockoutState(): PinLockoutState =
+        pinThrottleController.getState()
+
+    override suspend fun recordPinFailure(): PinLockoutState =
+        pinThrottleController.recordFailure()
+
+    override suspend fun resetPinThrottle() {
+        pinThrottleController.recordSuccess()
+    }
+
+    override suspend fun storeBiometricsUsageDecision(shouldUseBiometrics: Boolean) {
         biometryStorageController.setUseBiometricsAuth(shouldUseBiometrics)
     }
 
-    override fun getBiometricUserSelection(): Boolean {
+    override suspend fun getBiometricUserSelection(): Boolean {
         return biometryStorageController.getUseBiometricsAuth()
     }
 
-    override fun getBiometricsAvailability(listener: (BiometricsAvailability) -> Unit) {
-        biometricAuthenticationController.deviceSupportsBiometrics(listener)
+    override fun getBiometricsAvailability(): BiometricsAvailability {
+        return biometricAuthenticationController.getBiometricsAvailability()
     }
 
     override fun authenticateWithBiometrics(

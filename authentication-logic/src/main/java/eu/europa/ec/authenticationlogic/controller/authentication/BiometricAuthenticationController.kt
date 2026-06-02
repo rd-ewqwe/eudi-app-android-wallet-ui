@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -50,7 +50,8 @@ enum class BiometricsAuthError(val code: Int) {
 }
 
 interface BiometricAuthenticationController {
-    fun deviceSupportsBiometrics(listener: (BiometricsAvailability) -> Unit)
+    fun getBiometricsAvailability(): BiometricsAvailability
+
     fun authenticate(
         context: Context,
         notifyOnAuthenticationFailure: Boolean,
@@ -74,16 +75,15 @@ class BiometricAuthenticationControllerImpl(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : BiometricAuthenticationController {
 
-    override fun deviceSupportsBiometrics(listener: (BiometricsAvailability) -> Unit) {
+    override fun getBiometricsAvailability(): BiometricsAvailability {
         val biometricManager = BiometricManager.from(resourceProvider.provideContext())
-        when (biometricManager.canAuthenticate(BIOMETRIC_WEAK)) {
-            BiometricManager.BIOMETRIC_SUCCESS -> listener.invoke(BiometricsAvailability.CanAuthenticate)
-            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> listener.invoke(BiometricsAvailability.NonEnrolled)
-            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE, BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> listener.invoke(
+        return when (biometricManager.canAuthenticate(BIOMETRIC_WEAK)) {
+            BiometricManager.BIOMETRIC_SUCCESS -> BiometricsAvailability.CanAuthenticate
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricsAvailability.NonEnrolled
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE, BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED ->
                 BiometricsAvailability.Failure(resourceProvider.getString(R.string.biometric_no_hardware))
-            )
 
-            else -> listener.invoke(BiometricsAvailability.Failure(resourceProvider.getString(R.string.biometric_unknown_error)))
+            else -> BiometricsAvailability.Failure(resourceProvider.getString(R.string.biometric_unknown_error))
         }
     }
 

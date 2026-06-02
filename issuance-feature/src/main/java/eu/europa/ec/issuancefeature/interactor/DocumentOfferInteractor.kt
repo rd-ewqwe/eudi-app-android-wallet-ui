@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -20,6 +20,7 @@ import android.content.Context
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationResult
 import eu.europa.ec.authenticationlogic.model.BiometricCrypto
+import eu.europa.ec.authenticationlogic.secure.SecurePin
 import eu.europa.ec.businesslogic.config.ConfigLogic
 import eu.europa.ec.businesslogic.extension.safeAsync
 import eu.europa.ec.businesslogic.util.safeLet
@@ -95,7 +96,7 @@ interface DocumentOfferInteractor {
         offerUri: String,
         issuerName: String,
         navigation: ConfigNavigation,
-        txCode: String? = null
+        txCode: SecurePin? = null
     ): Flow<IssueDocumentsInteractorPartialState>
 
     fun handleUserAuthentication(
@@ -207,13 +208,13 @@ class DocumentOfferInteractorImpl(
         offerUri: String,
         issuerName: String,
         navigation: ConfigNavigation,
-        txCode: String?
+        txCode: SecurePin?
     ): Flow<IssueDocumentsInteractorPartialState> =
         flow {
             credentialOffers[offerUri]?.let { offer ->
                 walletCoreDocumentsController.issueDocumentsByOffer(
                     offer = offer,
-                    txCode = txCode
+                    txCode = txCode?.getAndClearAsString()
                 ).map { response ->
                     when (response) {
                         is IssueDocumentsPartialState.Failure -> {
@@ -271,24 +272,22 @@ class DocumentOfferInteractorImpl(
         notifyOnAuthenticationFailure: Boolean,
         resultHandler: DeviceAuthenticationResult
     ) {
-        deviceAuthenticationInteractor.getBiometricsAvailability {
-            when (it) {
-                is BiometricsAvailability.CanAuthenticate -> {
-                    deviceAuthenticationInteractor.authenticateWithBiometrics(
-                        context = context,
-                        crypto = crypto,
-                        notifyOnAuthenticationFailure = notifyOnAuthenticationFailure,
-                        resultHandler = resultHandler
-                    )
-                }
+        when (deviceAuthenticationInteractor.getBiometricsAvailability()) {
+            is BiometricsAvailability.CanAuthenticate -> {
+                deviceAuthenticationInteractor.authenticateWithBiometrics(
+                    context = context,
+                    crypto = crypto,
+                    notifyOnAuthenticationFailure = notifyOnAuthenticationFailure,
+                    resultHandler = resultHandler
+                )
+            }
 
-                is BiometricsAvailability.NonEnrolled -> {
-                    deviceAuthenticationInteractor.launchBiometricSystemScreen()
-                }
+            is BiometricsAvailability.NonEnrolled -> {
+                deviceAuthenticationInteractor.launchBiometricSystemScreen()
+            }
 
-                is BiometricsAvailability.Failure -> {
-                    resultHandler.onAuthenticationFailure()
-                }
+            is BiometricsAvailability.Failure -> {
+                resultHandler.onAuthenticationFailure()
             }
         }
     }

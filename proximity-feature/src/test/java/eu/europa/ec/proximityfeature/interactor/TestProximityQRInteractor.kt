@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -16,7 +16,6 @@
 
 package eu.europa.ec.proximityfeature.interactor
 
-import androidx.activity.ComponentActivity
 import eu.europa.ec.commonfeature.config.PresentationMode
 import eu.europa.ec.commonfeature.config.RequestUriConfig
 import eu.europa.ec.corelogic.controller.PresentationControllerConfig
@@ -27,8 +26,6 @@ import eu.europa.ec.testfeature.util.mockedExceptionWithMessage
 import eu.europa.ec.testfeature.util.mockedExceptionWithNoMessage
 import eu.europa.ec.testfeature.util.mockedGenericErrorMessage
 import eu.europa.ec.testfeature.util.mockedPlainFailureMessage
-import eu.europa.ec.testlogic.base.TestApplication
-import eu.europa.ec.testlogic.base.createActivity
 import eu.europa.ec.testlogic.extension.expectNoEvents
 import eu.europa.ec.testlogic.extension.runFlowTest
 import eu.europa.ec.testlogic.extension.runTest
@@ -44,18 +41,14 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.net.URI
 
-@RunWith(RobolectricTestRunner::class)
-@Config(application = TestApplication::class)
 class TestProximityQRInteractor {
 
     @get:Rule
@@ -302,6 +295,47 @@ class TestProximityQRInteractor {
     }
     //endregion
 
+    // Case 8:
+    // Emits Connecting (not-handled) FOLLOWED by Connected, both via the shareIn-pattern
+    // flow with sufficient replay. Asserting on the Connected emission guarantees that the
+    // upstream flow had to process Connecting first, which forces the `else -> null` arm
+    // (and the negative `is Disconnected` check) to actually run.
+    @Test
+    fun `Given Case 8, When startQrEngagement is called, Then the not-handled event traverses the else arm before Connected is emitted`() {
+        coroutineRule.runTest {
+            // Given
+            whenever(walletCorePresentationController.events).thenReturn(
+                flow {
+                    emit(TransferEventPartialState.Connecting)
+                    emit(TransferEventPartialState.Connected)
+                }.shareIn(coroutineRule.testScope, SharingStarted.Lazily, 2)
+            )
+
+            // When
+            interactor.startQrEngagement().runFlowTest {
+                // Then — the Connected emission is the next mapped value (Connecting -> null
+                // via the else arm, then Connected -> ProximityQRPartialState.Connected).
+                assertEquals(ProximityQRPartialState.Connected, awaitItem())
+            }
+        }
+    }
+
+    //region constructor default
+    // Exercises the default `walletCorePresentationController = null` parameter branch of
+    // ScopedPresentationInteractorDelegate. The lazy Koin lookup is never triggered (we do not
+    // access the protected property), so this stays a pure construction smoke-test.
+    @Test
+    fun `When constructed without walletCorePresentationController, Then construction does not throw`() {
+        // When
+        val newInteractor = ProximityQRInteractorImpl(
+            resourceProvider = resourceProvider,
+        )
+
+        // Then
+        assertEquals("DefaultPresentationScopeId", newInteractor.presentationScopeId)
+    }
+    //endregion
+
     //region cancelTransfer
     @Test
     fun `Verify that cancelTransfer calls walletCorePresentationController#stopPresentation`() {
@@ -323,8 +357,7 @@ class TestProximityQRInteractor {
     // with those exact arguments.
     @Test
     fun `Given Case 1, When toggleNfcEngagement is called, Then Case 1 Expected Result is returned`() {
-        val componentActivity =
-            createActivity(EudiComponentActivity::class.java) as ComponentActivity
+        val componentActivity = mock<EudiComponentActivity>()
 
         interactor.toggleNfcEngagement(
             componentActivity = componentActivity,
@@ -347,8 +380,7 @@ class TestProximityQRInteractor {
     // with those exact arguments.
     @Test
     fun `Given Case 2, When toggleNfcEngagement is called, Then Case 2 Expected Result is returned`() {
-        val componentActivity =
-            createActivity(EudiComponentActivity::class.java) as ComponentActivity
+        val componentActivity = mock<EudiComponentActivity>()
 
         interactor.toggleNfcEngagement(
             componentActivity = componentActivity,

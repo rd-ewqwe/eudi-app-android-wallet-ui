@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -21,8 +21,11 @@ object CoreActions {
     const val VCI_DYNAMIC_PRESENTATION = "vci.dynamic.presentation.eudi.action"
 
     const val REVOCATION_WORK_REFRESH_ACTION = "revocation.refresh.action"
+    const val RE_ISSUANCE_WORK_REFRESH_ACTION = "reissuance.refresh.action"
+    const val RE_ISSUANCE_WORK_REFRESH_DETAILS_ACTION = "reissuance.refresh_details.action"
     const val REVOCATION_WORK_REFRESH_DETAILS_ACTION = "revocation.refresh_details.action"
     const val REVOCATION_WORK_MESSAGE_ACTION = "revocation.message.action"
     const val REVOCATION_IDS_EXTRA = "revocation.ids.extra"
     const val REVOCATION_IDS_DETAILS_EXTRA = "revocation.ids_details.extra"
+    const val RE_ISSUANCE_IDS_DETAILS_EXTRA = "reissuance.ids_details.extra"
 }

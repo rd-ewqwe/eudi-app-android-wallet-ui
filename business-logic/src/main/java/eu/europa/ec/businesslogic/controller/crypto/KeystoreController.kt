@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -27,7 +27,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
 interface KeystoreController {
-    fun retrieveOrGenerateSecretKey(userAuthenticationRequired: Boolean): SecretKey?
+    suspend fun retrieveOrGenerateSecretKey(userAuthenticationRequired: Boolean): SecretKey?
 }
 
 class KeystoreControllerImpl(
@@ -36,8 +36,8 @@ class KeystoreControllerImpl(
     private val uuidProvider: UuidProvider
 ) : KeystoreController {
 
-    companion object {
-        private const val STORE_TYPE = "AndroidKeyStore"
+    private companion object {
+        const val STORE_TYPE = "AndroidKeyStore"
     }
 
     private var androidKeyStore: KeyStore? = null
@@ -72,7 +72,7 @@ class KeystoreControllerImpl(
      * @return The retrieved or newly generated [SecretKey], or `null` if the Android KeyStore
      *         is unavailable or if any other error occurs during the process.
      */
-    override fun retrieveOrGenerateSecretKey(userAuthenticationRequired: Boolean): SecretKey? {
+    override suspend fun retrieveOrGenerateSecretKey(userAuthenticationRequired: Boolean): SecretKey? {
         return androidKeyStore?.let {
             val alias = prefKeys.getCryptoAlias()
             if (alias.isEmpty()) {
@@ -88,18 +88,23 @@ class KeystoreControllerImpl(
 
     @Suppress("DEPRECATION")
     private fun generateSecretKey(alias: String, userAuthenticationRequired: Boolean) {
-        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, STORE_TYPE)
 
-        val builder = KeyGenParameterSpec.Builder(
+        fun buildSpec(useStrongBox: Boolean): KeyGenParameterSpec = KeyGenParameterSpec.Builder(
             alias,
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
         ).apply {
             setKeySize(256)
             setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+
+            if (useStrongBox) {
+                setIsStrongBoxBacked(true)
+            }
+
             if (userAuthenticationRequired) {
                 setUserAuthenticationRequired(true)
                 setInvalidatedByBiometricEnrollment(true)
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     setUserAuthenticationParameters(
                         0,
@@ -109,13 +114,23 @@ class KeystoreControllerImpl(
                     setUserAuthenticationValidityDurationSeconds(-1)
                 }
             }
+        }.build()
+
+        fun generate(useStrongBox: Boolean) {
+            val keyGenerator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                STORE_TYPE
+            )
+
+            keyGenerator.init(buildSpec(useStrongBox))
+            keyGenerator.generateKey()
         }
 
-        keyGenerator.init(
-            builder.build()
-        )
-
-        keyGenerator.generateKey()
+        try {
+            generate(useStrongBox = true)
+        } catch (_: android.security.keystore.StrongBoxUnavailableException) {
+            generate(useStrongBox = false)
+        }
     }
 
     private fun getSecretKey(keyStore: KeyStore, alias: String): SecretKey {

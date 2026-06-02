@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -172,7 +172,7 @@ fun IssuerDetailsCard(
             WrapListItem(
                 modifier = Modifier.fillMaxWidth(),
                 item = ListItemDataUi(
-                    itemId = stringResource(R.string.document_details_issuer_card_id),
+                    itemId = ISSUER_DETAILS_CARD_ITEM_ID,
                     mainContentData = ListItemMainContentDataUi.Text(
                         text = data.issuerName.orEmpty()
                     ),
@@ -271,6 +271,8 @@ private fun IssuerDetailsCardExpanded(
         }
     }
 }
+
+private const val ISSUER_DETAILS_CARD_ITEM_ID = "issuerDetailsCardId"
 
 @ThemeModePreviews
 @Composable

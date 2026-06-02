@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -70,6 +70,11 @@ fun provideKeystoreController(
 ): KeystoreController =
     KeystoreControllerImpl(prefKeys, logController, uuidProvider)
 
+@Single
+fun provideUuidProvider(): UuidProvider {
+    return UuidProviderImpl()
+}
+
 @Factory
 fun provideCryptoController(keystoreController: KeystoreController): CryptoController =
     CryptoControllerImpl(keystoreController)
@@ -80,8 +85,3 @@ fun provideFormValidator(logController: LogController): FormValidator =
 
 @Factory
 fun provideFiltersValidator(): FilterValidator = FilterValidatorImpl()
-
-@Single
-fun provideUuidProvider(): UuidProvider {
-    return UuidProviderImpl()
-}

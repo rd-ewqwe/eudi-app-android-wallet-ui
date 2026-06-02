@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 European Commission
+ * Copyright (c) 2026 European Commission
  *
  * Licensed under the EUPL, Version 1.2 or - as soon they will be approved by the European
  * Commission - subsequent versions of the EUPL (the "Licence"); You may not use this work
@@ -14,19 +14,26 @@
  * governing permissions and limitations under the Licence.
  */
 
-package eu.europa.ec.uilogic
+package eu.europa.ec.uilogic.navigation.helper
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import android.content.Intent
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
-/**
- * Example local unit test, which will execute on the development machine (host).
- *
- * See [testing documentation](http://d.android.com/tools/testing).
- */
-class ExampleUnitTest {
-    @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
-    }
+const val INTENT_ACTION_KEY = "intent_action"
+
+@Parcelize
+data class IntentAction(
+    val intent: Intent,
+    val type: IntentType
+) : Parcelable
+
+enum class IntentType(val associatedActions: List<String>) {
+    DC_API(
+        associatedActions = listOf(
+            "androidx.identitycredentials.action.get_credentials",
+            "androidx.credentials.registry.provider.action.get_credential"
+        )
+    ),
 }
+
